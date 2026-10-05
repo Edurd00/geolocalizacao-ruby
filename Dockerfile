@@ -11,6 +11,10 @@ RUN apt-get update -qq && \
 # Estágio de Build
 FROM base as build
 
+# Instala Node.js para compilação de assets
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs
+
 # Garanta o Bundler correto
 RUN gem install bundler -v 2.5.11
 
@@ -22,8 +26,16 @@ RUN bundle config set --local deployment 'true' && \
 
 COPY . .
 
-# Precompilação de assets
+# Crie os diretórios de build de assets
+RUN mkdir -p app/assets/builds public/assets
+
+# Garante permissão nos executáveis
 RUN chmod +x bin/*
+
+# Baixa o executável do Tailwind (caso esteja usando tailwindcss-rails)
+RUN ./bin/rails tailwindcss:build || true
+
+# Precompila os assets para produção
 RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
 
 # Estágio Final
