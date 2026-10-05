@@ -28,6 +28,7 @@ RUN bundle config set --local deployment 'true' && \
     bundle install
 
 COPY . .
+RUN chmod +x bin/* entrypoint.sh || chmod +x bin/*
 
 # Estágio Final
 FROM base
@@ -37,11 +38,11 @@ COPY --from=build --chown=rails:rails /rails /rails
 
 RUN chmod +x /rails/entrypoint.sh
 
-EXPOSE 3000
 ENV RAILS_ENV=production \
     RAILS_LOG_TO_STDOUT=true \
     RAILS_SERVE_STATIC_FILES=true
 USER rails
 
 ENTRYPOINT ["/rails/entrypoint.sh"]
-CMD ["./bin/rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+EXPOSE 3000
+CMD ["./bin/rails", "server", "-b", "0.0.0.0"]
