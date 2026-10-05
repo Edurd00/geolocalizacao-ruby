@@ -8,4 +8,8 @@ Rails.application.routes.draw do
   post "validation/extract_coords", to: "validation#extract_coords"
 
   get "organizacao", to: "organizacao#index"
+
+  get "patrimonio", to: "patrimonio#index", as: :patrimonio_index
+  get "patrimonio/:id", to: "patrimonio#show", as: :patrimonio
+  patch "patrimonio/:id", to: "patrimonio#update", as: :update_patrimonio
 end

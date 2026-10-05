@@ -1,6 +1,8 @@
 class Church < ApplicationRecord
   self.table_name = 'igrejas'
 
+  has_many :assets, class_name: 'Asset', foreign_key: :codigo_totvs, primary_key: :codigo_totvs
+
   REGIAO_GEOGRAFICA_MAPPING = {
     'Sudeste - SP' => ['SP'],
     'Sudeste - MG' => ['MG'],
@@ -45,6 +47,11 @@ class Church < ApplicationRecord
     elsif respond_to?(:status=)
       self.status = boolean_value ? 'VALIDADO' : 'PENDENTE'
     end
+  end
+
+  # Returns the latest asset submission
+  def latest_asset
+    assets.order(ano_referencia: :desc, created_at: :desc).first
   end
 
   # Calculates porte/hierarchical level
