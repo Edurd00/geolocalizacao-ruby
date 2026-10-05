@@ -1,55 +1,35 @@
-# syntax = docker/dockerfile:1
-
 ARG RUBY_VERSION=3.2.3
 FROM ruby:$RUBY_VERSION-slim as base
 
-# Rails app lives here
 WORKDIR /rails
 
-# Set production environment
-ENV RAILS_ENV="production" \
-    BUNDLE_DEPLOYMENT="1" \
-    BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development test"
+# Pacotes de execução e compilação
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y build-essential libpq-dev git curl libvips && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
-# Throw-away build stage to reduce size of final image
+# Estágio de Build
 FROM base as build
 
-# Install packages needed to build gems and node assets
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential libpq-dev pkg-config git libyaml-dev nodejs npm && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+# Garanta o Bundler correto
+RUN gem install bundler -v 2.5.11
 
-# Install application gems
 COPY Gemfile Gemfile.lock ./
+
 RUN bundle config set --local deployment 'true' && \
     bundle config set --local without 'development test' && \
-    bundle install && \
-    rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git
+    bundle install
 
-# Copy application code
 COPY . .
 
-# Precompile assets for production
-RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile rescue true
+# Precompilação de assets
+RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
 
-# Final stage for app image
+# Estágio Final
 FROM base
 
-# Install packages needed for deployment (PostgreSQL client)
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y libpq5 curl && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
-
-# Copy built gems and application code from build stage
 COPY --from=build /usr/local/bundle /usr/local/bundle
 COPY --from=build /rails /rails
 
-# Run and own app as non-root user for security
-RUN useradd rails --create-home --shell /bin/bash && \
-    chown -R rails:rails db log tmp
-USER rails:rails
-
-# Entrypoint prepares the database
 EXPOSE 3000
-CMD ["./bin/puma", "-C", "config/puma.rb"]
+CMD ["./bin/rails", "server", "-b", "0.0.0.0"]
