@@ -23,6 +23,11 @@
 # misc
 .DS_Store
 *.pem
+*.log
+backup_igrejas_completo.json
+dev_server.log
+server.log
+server_output.log
 
 # debug
 npm-debug.log*

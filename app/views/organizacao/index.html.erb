@@ -1,0 +1,165 @@
+<div class="space-y-6">
+  <!-- Selector & Controls Panel -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-5">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <div>
+        <h2 class="text-base font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+          <span class="text-indigo-400">🏛️</span> Estrutura Hierárquica da Igreja
+        </h2>
+        <p class="text-xs text-slate-400 font-medium mt-1">
+          Selecione a Região e o Estado Físico (UF) para visualizar a estrutura organizacional das igrejas.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <span class="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-800/60">
+          <%= @churches.size %> Igrejas nesta Seleção
+        </span>
+      </div>
+    </div>
+
+    <!-- Filters Form -->
+    <form action="/organizacao" method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+      <!-- Region Selector -->
+      <div class="lg:col-span-4 flex flex-col gap-1">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Jurisdição / Região</label>
+        <select name="region" onchange="this.form.submit()" class="w-full bg-slate-800 border border-slate-700 text-white text-xs sm:text-sm rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <% @regions.each do |reg| %>
+            <option value="<%= reg %>" <%= "selected" if @selected_region == reg %>><%= reg %></option>
+          <% end %>
+        </select>
+      </div>
+
+      <!-- State Selector -->
+      <div class="lg:col-span-3 flex flex-col gap-1">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Estado Físico (UF)</label>
+        <select name="state" onchange="this.form.submit()" class="w-full bg-slate-800 border border-slate-700 text-white text-xs sm:text-sm rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="ALL" <%= "selected" if @selected_state == "ALL" %>>Todos os Estados</option>
+          <% @states.each do |st| %>
+            <option value="<%= st %>" <%= "selected" if @selected_state == st %>><%= st %></option>
+          <% end %>
+        </select>
+      </div>
+
+      <!-- Search Query -->
+      <div class="lg:col-span-5 flex flex-col gap-1">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Buscar Igreja</label>
+        <div class="relative flex items-center">
+          <input type="text" name="search" value="<%= @search_query %>" placeholder="Pesquisar por TOTVS, Nome ou Município..." class="w-full bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 text-xs sm:text-sm rounded-xl pl-3 pr-20 py-2.5 font-semibold outline-none focus:ring-2 focus:ring-indigo-500" />
+          <button type="submit" class="absolute right-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors">
+            Filtrar
+          </button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- Regional Counters / Badges Section -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3">
+    <h3 class="text-xs font-black text-slate-400 uppercase tracking-wider">
+      Contadores por Nível Hierárquico em <%= @selected_region %>
+    </h3>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      <%
+        porte_colors = {
+          'ESTADUAL' => 'bg-blue-950/80 text-blue-300 border-blue-800',
+          'SETORIAL' => 'bg-amber-950/80 text-amber-300 border-amber-800',
+          'CENTRAL' => 'bg-orange-950/80 text-orange-300 border-orange-800',
+          'REGIONAL' => 'bg-emerald-950/80 text-emerald-300 border-emerald-800',
+          'LOCAL' => 'bg-slate-800 text-slate-300 border-slate-700',
+          'CASA DE ORAÇÃO' => 'bg-pink-950/80 text-pink-300 border-pink-800',
+          'ALDEIA INDIGENA' => 'bg-cyan-950/80 text-cyan-300 border-cyan-800'
+        }
+      %>
+
+      <% Church::PORTE_LEVELS.each do |level| %>
+        <% count = @regional_counts[level] || 0 %>
+        <% color_class = porte_colors[level] || 'bg-slate-800 text-slate-300 border-slate-700' %>
+        <div class="flex flex-col items-center justify-center p-3 rounded-xl border <%= color_class %> shadow-xs">
+          <span class="text-lg font-extrabold"><%= count %></span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-center mt-0.5"><%= level %></span>
+        </div>
+      <% end %>
+    </div>
+  </section>
+
+  <!-- Expandable Cards & Tree Structure Viewport -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4 min-h-[350px]">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <h3 class="text-xs font-black text-slate-400 uppercase tracking-wider">
+        Igrejas Agrupadas por Nível Hierárquico (<%= @selected_region %><%= @selected_state != 'ALL' ? " - #{@selected_state}" : "" %>)
+      </h3>
+      <span class="text-[10px] text-slate-500 font-bold">
+        Clique no card para expandir/recolher
+      </span>
+    </div>
+
+    <% if @churches.empty? %>
+      <div class="text-center py-16 text-slate-500 italic text-sm">
+        Nenhuma igreja encontrada para a região/estado selecionado.
+      </div>
+    <% else %>
+      <div class="space-y-4">
+        <% Church::PORTE_LEVELS.each do |level| %>
+          <% group = @churches_by_porte[level] || [] %>
+          <% next if group.empty? %>
+
+          <details class="group bg-slate-950 border border-slate-800 rounded-xl overflow-hidden transition-all" open>
+            <summary class="flex items-center justify-between p-4 cursor-pointer select-none bg-slate-800/60 hover:bg-slate-800 text-white font-bold text-sm transition-colors">
+              <div class="flex items-center gap-3">
+                <span class="transition-transform group-open:rotate-90 text-indigo-400">▶</span>
+                <span class="uppercase tracking-wide"><%= level %></span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                  <%= group.size %> <%= group.size == 1 ? 'igreja' : 'igrejas' %>
+                </span>
+              </div>
+              <span class="text-xs text-slate-400 font-normal hidden sm:inline">Exibir lista completa</span>
+            </summary>
+
+            <div class="p-4 space-y-2 border-t border-slate-800 bg-slate-950">
+              <% group.each do |church| %>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:border-slate-700 transition-colors gap-3">
+                  <div class="flex items-start gap-3 min-w-0 flex-1">
+                    <div class="w-3 h-3 rounded-full bg-indigo-500 shrink-0 mt-1"></div>
+
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-sm font-bold text-white">
+                          <%= church.nome %>
+                        </span>
+                        <% if church.respond_to?(:codigo_totvs) && church.codigo_totvs.present? %>
+                          <span class="text-[10px] font-mono font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700">
+                            TOTVS: <%= church.codigo_totvs %>
+                          </span>
+                        <% end %>
+                      </div>
+
+                      <div class="text-xs text-slate-400 mt-1">
+                        <%= church.respond_to?(:endereco) ? church.endereco : "" %>
+                        <%= " • #{church.bairro}" if church.respond_to?(:bairro) && church.bairro.present? %>
+                        <%= " • #{church.municipio} - #{church.estado}" if church.respond_to?(:municipio) && church.municipio.present? %>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2 shrink-0">
+                    <% if church.respond_to?(:latitude) && church.respond_to?(:longitude) && church.latitude.present? && church.longitude.present? && church.latitude != 0 && church.longitude != 0 %>
+                      <a href="/?query=<%= church.respond_to?(:codigo_totvs) && church.codigo_totvs.present? ? church.codigo_totvs : church.nome %>" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1">
+                        <span>📍 Localizar no Mapa</span>
+                      </a>
+                    <% else %>
+                      <span class="text-xs text-slate-500 italic px-2 py-1 border border-dashed border-slate-800 rounded-lg">
+                        Sem Geolocalização
+                      </span>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          </details>
+        <% end %>
+      </div>
+    <% end %>
+  </section>
+</div>

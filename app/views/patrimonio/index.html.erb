@@ -1,0 +1,127 @@
+<div class="space-y-6 max-w-5xl mx-auto">
+  <!-- Search & Filter Header Card -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-indigo-400 text-lg">🪑</span>
+          <span class="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/80 px-2.5 py-0.5 rounded-md border border-indigo-800/60">
+            Controle Patrimonial TOTVS
+          </span>
+        </div>
+        <h2 class="text-xl font-extrabold text-white tracking-tight">
+          Declaração e Inventário de Patrimônio
+        </h2>
+        <p class="text-xs text-slate-400 font-medium mt-1">
+          Pesquise por código TOTVS ou nome da igreja para visualizar ou preencher o inventário de bens materiais.
+        </p>
+      </div>
+
+      <a href="/organizacao" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition-colors shrink-0 flex items-center gap-1.5">
+        <span>🏢 Estrutura Organizacional</span>
+      </a>
+    </div>
+
+    <!-- Search Form -->
+    <form action="/patrimonio" method="get" class="flex flex-col sm:flex-row gap-3">
+      <div class="relative flex-1">
+        <input
+          type="text"
+          name="query"
+          value="<%= @query %>"
+          placeholder="Pesquisar por Código TOTVS ou Nome da Igreja..."
+          class="w-full h-12 bg-slate-800/90 border border-slate-700 text-white placeholder:text-slate-500 font-semibold text-sm rounded-xl pl-4 pr-10 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+        />
+        <% if @query.present? %>
+          <a href="/patrimonio" class="absolute right-3 top-3.5 text-slate-500 hover:text-white text-xs font-bold">
+            ✕
+          </a>
+        <% end %>
+      </div>
+      <button
+        type="submit"
+        class="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-md shrink-0 flex items-center justify-center gap-2"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <span>Buscar Igreja</span>
+      </button>
+    </form>
+  </section>
+
+  <!-- Church List Container -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <h3 class="text-xs font-black text-slate-400 uppercase tracking-wider">
+        Igrejas Cadastradas (<%= @churches.size %> encontradas)
+      </h3>
+      <span class="text-[10px] text-slate-500 font-bold">
+        Ano de Referência: <%= Time.current.year %>
+      </span>
+    </div>
+
+    <% if @churches.empty? %>
+      <div class="text-center py-16 text-slate-500 italic text-sm">
+        Nenhuma igreja encontrada para o termo pesquisado.
+      </div>
+    <% else %>
+      <div class="grid grid-cols-1 gap-3">
+        <% @churches.each do |church| %>
+          <% latest = church.respond_to?(:latest_asset) ? church.latest_asset : nil %>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-slate-700 transition-colors gap-4">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+              <div class="w-10 h-10 rounded-xl bg-indigo-950/80 border border-indigo-800/60 text-indigo-400 flex items-center justify-center shrink-0 font-extrabold text-sm">
+                🏛️
+              </div>
+
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h4 class="text-base font-bold text-white leading-snug">
+                    <%= church.nome %>
+                  </h4>
+                  <% if church.respond_to?(:codigo_totvs) && church.codigo_totvs.present? %>
+                    <span class="text-xs font-mono font-bold bg-slate-800 text-indigo-300 px-2.5 py-0.5 rounded-lg border border-slate-700">
+                      TOTVS: <%= church.codigo_totvs %>
+                    </span>
+                  <% end %>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 uppercase">
+                    <%= church.respond_to?(:calculated_porte) ? church.calculated_porte : "LOCAL" %>
+                  </span>
+                </div>
+
+                <p class="text-xs text-slate-400 mt-1">
+                  <%= church.respond_to?(:endereco) ? church.endereco : "" %>
+                  <%= " • #{church.bairro}" if church.respond_to?(:bairro) && church.bairro.present? %>
+                  <%= " • #{church.municipio} - #{church.estado}" if church.respond_to?(:municipio) && church.municipio.present? %>
+                </p>
+
+                <% if latest.present? %>
+                  <div class="flex items-center gap-2 mt-2 text-[11px] text-emerald-400 font-bold">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Inventário <%= latest.ano_referencia %> Enviado em <%= latest.data_envio&.strftime("%d/%m/%Y") rescue "Recente" %></span>
+                  </div>
+                <% else %>
+                  <div class="flex items-center gap-2 mt-2 text-[11px] text-amber-400 font-semibold">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span>Pendente de Inventário <%= Time.current.year %></span>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <a
+                href="/patrimonio/<%= church.respond_to?(:codigo_totvs) && church.codigo_totvs.present? ? church.codigo_totvs : church.id %>"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5"
+              >
+                <span><%= latest.present? ? "Editar Patrimônio" : "Preencher Patrimônio" %></span>
+                <span>➔</span>
+              </a>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </section>
+</div>
