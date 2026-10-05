@@ -12,4 +12,7 @@ Rails.application.routes.draw do
   get "patrimonio", to: "patrimonio#index", as: :patrimonio_index
   get "patrimonio/:id", to: "patrimonio#show", as: :patrimonio
   patch "patrimonio/:id", to: "patrimonio#update", as: :update_patrimonio
+
+  get "coligacoes", to: "coligacoes#index"
+  get "relatorios", to: "relatorios#index"
 end

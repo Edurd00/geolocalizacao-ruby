@@ -1,0 +1,208 @@
+<div class="space-y-6 max-w-6xl mx-auto">
+  <!-- Controls Panel -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-indigo-400 text-lg">📊</span>
+          <span class="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/80 px-2.5 py-0.5 rounded-md border border-indigo-800/60">
+            Inteligência Patrimonial & BI
+          </span>
+        </div>
+        <h2 class="text-xl font-extrabold text-white tracking-tight">
+          Painel Consolidado de Relatórios BI
+        </h2>
+        <p class="text-xs text-slate-400 font-medium mt-1">
+          Métricas de geocodificação, status de validação e distribuição por estado e nível hierárquico.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="window.print()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer">
+          <span>📄 Imprimir / PDF</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <form action="/relatorios" method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+      <div class="lg:col-span-6 flex flex-col gap-1">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Jurisdição / Região</label>
+        <select name="region" onchange="this.form.submit()" class="w-full bg-slate-800 border border-slate-700 text-white text-xs sm:text-sm rounded-xl p-2.5 font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="ALL" <%= "selected" if @selected_region == "ALL" %>>Todas as Regiões</option>
+          <% @regions.each do |reg| %>
+            <option value="<%= reg %>" <%= "selected" if @selected_region == reg %>><%= reg %></option>
+          <% end %>
+        </select>
+      </div>
+
+      <div class="lg:col-span-6 flex flex-col gap-1">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Estado Físico (UF)</label>
+        <select name="state" onchange="this.form.submit()" class="w-full bg-slate-800 border border-slate-700 text-white text-xs sm:text-sm rounded-xl p-2.5 font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="ALL" <%= "selected" if @selected_state == "ALL" %>>Todos os Estados</option>
+          <% @states.each do |st| %>
+            <option value="<%= st %>" <%= "selected" if @selected_state == st %>><%= st %></option>
+          <% end %>
+        </select>
+      </div>
+    </form>
+  </section>
+
+  <!-- Summary KPI Cards Bar -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex items-center justify-between">
+      <div>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Igrejas</p>
+        <h3 class="text-2xl font-black text-white font-mono mt-1"><%= @metrics[:total_igrejas].to_s.reverse.gsub(/(\d{3})(?=\d)/, '\1.').reverse %></h3>
+        <p class="text-[10px] text-slate-500 font-bold mt-1">Registradas na Base</p>
+      </div>
+      <div class="w-12 h-12 rounded-2xl bg-slate-800 border border-slate-700 text-indigo-400 flex items-center justify-center text-xl shrink-0">
+        🏛️
+      </div>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex items-center justify-between">
+      <div>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Igrejas Validadas</p>
+        <h3 class="text-2xl font-black text-emerald-400 font-mono mt-1"><%= @metrics[:validadas].to_s.reverse.gsub(/(\d{3})(?=\d)/, '\1.').reverse %></h3>
+        <p class="text-[10px] text-emerald-500/80 font-bold mt-1">Com Coordenadas Aprovadas</p>
+      </div>
+      <div class="w-12 h-12 rounded-2xl bg-emerald-950/80 border border-emerald-800/60 text-emerald-400 flex items-center justify-center text-xl shrink-0">
+        ✅
+      </div>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex items-center justify-between">
+      <div>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Igrejas Pendentes</p>
+        <h3 class="text-2xl font-black text-amber-400 font-mono mt-1"><%= @metrics[:pendentes].to_s.reverse.gsub(/(\d{3})(?=\d)/, '\1.').reverse %></h3>
+        <p class="text-[10px] text-amber-500/80 font-bold mt-1">Aguardando Validação</p>
+      </div>
+      <div class="w-12 h-12 rounded-2xl bg-amber-950/80 border border-amber-800/60 text-amber-400 flex items-center justify-center text-xl shrink-0">
+        ⏳
+      </div>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex items-center justify-between">
+      <div>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Taxa de Validação</p>
+        <h3 class="text-2xl font-black text-indigo-400 font-mono mt-1"><%= @metrics[:pct_validadas] %>%</h3>
+        <p class="text-[10px] text-indigo-400/80 font-bold mt-1">Progresso Geral do Campo</p>
+      </div>
+      <div class="w-12 h-12 rounded-2xl bg-indigo-950/80 border border-indigo-800/60 text-indigo-400 flex items-center justify-center text-xl shrink-0">
+        📈
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive BI Dynamic Charts Section driven by Stimulus chart_controller -->
+  <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Chart 1: Doughnut - Status da Validação (5 cols) -->
+    <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+      <div class="border-b border-slate-800 pb-3">
+        <h3 class="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <span>🍕</span> Validação de Igrejas
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Proporção entre igrejas validadas e pendentes</p>
+      </div>
+
+      <div class="h-64 w-full relative flex items-center justify-center">
+        <canvas
+          data-controller="chart"
+          data-chart-type-value="doughnut"
+          data-chart-labels-value='["Validadas", "Pendentes"]'
+          data-chart-data-value='[<%= @metrics[:validadas] %>, <%= @metrics[:pendentes] %>]'
+          data-chart-colors-value='["#22C55E", "#F97316"]'
+          data-chart-title-value="Status da Validação"
+          class="w-full h-full"
+        ></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 2: Pie - Distribuição por Porte (7 cols) -->
+    <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+      <div class="border-b border-slate-800 pb-3">
+        <h3 class="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <span>🏢</span> Distribuição por Nível Hierárquico (Porte)
+        </h3>
+        <p class="text-[10px] text-slate-400 font-medium">Classificação estrutural do campo</p>
+      </div>
+
+      <div class="h-64 w-full relative flex items-center justify-center">
+        <canvas
+          data-controller="chart"
+          data-chart-type-value="pie"
+          data-chart-labels-value='<%= @porte_distribution.keys.to_json.html_safe %>'
+          data-chart-data-value='<%= @porte_distribution.values.to_json.html_safe %>'
+          data-chart-colors-value='["#3B82F6", "#EAB308", "#F97316", "#22C55E", "#6B7280", "#EC4899", "#06B6D4"]'
+          data-chart-title-value="Porte Hierárquico"
+          class="w-full h-full"
+        ></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 3: BarChart - Distribuição por Estado Físico (Top 10 UFs) (12 cols) -->
+    <div class="lg:col-span-12 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+      <div class="border-b border-slate-800 pb-3 flex items-center justify-between">
+        <div>
+          <h3 class="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <span>🗺️</span> Distribuição por Estado (Top 10 UFs)
+          </h3>
+          <p class="text-[10px] text-slate-400 font-medium">Contagem de templos por estado da federação</p>
+        </div>
+      </div>
+
+      <div class="h-72 w-full relative">
+        <canvas
+          data-controller="chart"
+          data-chart-type-value="bar"
+          data-chart-labels-value='<%= @state_distribution.keys.to_json.html_safe %>'
+          data-chart-data-value='<%= @state_distribution.values.to_json.html_safe %>'
+          data-chart-colors-value='["#4F46E5"]'
+          data-chart-title-value="Igrejas por Estado"
+          class="w-full h-full"
+        ></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- Detailed Distribution Table -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+    <div class="border-b border-slate-800 pb-3">
+      <h3 class="text-xs font-black text-slate-300 uppercase tracking-wider">
+        Tabela Consolidada de Distribuição por Estado
+      </h3>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="bg-slate-950 text-slate-400 font-black border-b border-slate-800 uppercase tracking-wider text-[10px]">
+            <th class="p-3.5">Estado (UF)</th>
+            <th class="p-3.5 text-center">Total de Igrejas</th>
+            <th class="p-3.5 text-right">% do Campo Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800 font-semibold">
+          <% @state_distribution.each do |uf, count| %>
+            <% pct = @metrics[:total_igrejas] > 0 ? ((count.to_f / @metrics[:total_igrejas]) * 100).round(1) : 0 %>
+            <tr class="hover:bg-slate-800/50 transition-colors">
+              <td class="p-3.5 font-bold text-white font-mono">
+                <span class="w-6 h-6 rounded-md bg-indigo-950 text-indigo-300 border border-indigo-800 inline-flex items-center justify-center mr-2">
+                  <%= uf %>
+                </span>
+                Estado de <%= uf %>
+              </td>
+              <td class="p-3.5 text-center font-bold text-slate-200">
+                <%= count %>
+              </td>
+              <td class="p-3.5 text-right font-bold text-indigo-400 font-mono">
+                <%= pct %>%
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

@@ -96,6 +96,48 @@ class Church < ApplicationRecord
     where("UPPER(porte) = ?", target)
   }
 
+  # Aggregation Queries for BI Reports
+  def self.validated_vs_pending_counts
+    if column_names.include?('status')
+      validadas = where("LOWER(status) LIKE 'validad%' OR UPPER(status) IN ('VALIDADO', 'VALIDADA')").count
+      pendentes = count - validadas
+    elsif column_names.include?('validada')
+      validadas = where(validada: true).count
+      pendentes = count - validadas
+    else
+      validadas = 0
+      pendentes = count
+    end
+    { "VALIDADO" => validadas, "PENDENTE" => pendentes }
+  end
+
+  def self.state_distribution
+    where.not(estado: [nil, '']).group(:estado).order("count_all DESC").count
+  end
+
+  def self.porte_distribution
+    counts = Hash.new(0)
+    all.find_each do |church|
+      counts[church.calculated_porte] += 1
+    end
+    counts
+  end
+
+  def self.summary_metrics
+    total = count
+    status_counts = validated_vs_pending_counts
+    validadas = status_counts["VALIDADO"] || 0
+    pendentes = status_counts["PENDENTE"] || 0
+    pct = total > 0 ? ((validadas.to_f / total) * 100).round(1) : 0.0
+
+    {
+      total_igrejas: total,
+      validadas: validadas,
+      pendentes: pendentes,
+      pct_validadas: pct
+    }
+  end
+
   # Class methods for grouping and counting
   def self.grouped_by_region
     result = {}

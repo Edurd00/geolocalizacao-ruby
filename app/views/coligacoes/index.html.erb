@@ -1,0 +1,136 @@
+<div class="space-y-6 max-w-6xl mx-auto">
+  <!-- Search & Filter Controls -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-indigo-400 text-lg">🌳</span>
+          <span class="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/80 px-2.5 py-0.5 rounded-md border border-indigo-800/60">
+            Malha Hierárquica
+          </span>
+        </div>
+        <h2 class="text-xl font-extrabold text-white tracking-tight">
+          Topologia e Coligações das Igrejas
+        </h2>
+        <p class="text-xs text-slate-400 font-medium mt-1">
+          Visualização da hierarquia entre sedes estaduais, setoriais, centrais, regionais e congregações locais.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <span class="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-950 text-indigo-300 border border-indigo-800">
+          <%= @churches.size %> Igrejas Carregadas
+        </span>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <form action="/coligacoes" method="get" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+      <!-- State -->
+      <div class="sm:col-span-4 flex flex-col gap-1">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Estado (UF)</label>
+        <select name="state" onchange="this.form.submit()" class="w-full bg-slate-800 border border-slate-700 text-white text-xs sm:text-sm rounded-xl p-2.5 font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="ALL" <%= "selected" if @selected_state == "ALL" %>>Todos os Estados</option>
+          <% @states.each do |st| %>
+            <option value="<%= st %>" <%= "selected" if @selected_state == st %>><%= st %></option>
+          <% end %>
+        </select>
+      </div>
+
+      <!-- Query Search -->
+      <div class="sm:col-span-8 flex flex-col gap-1">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Buscar Igreja</label>
+        <div class="relative flex items-center">
+          <input
+            type="text"
+            name="query"
+            value="<%= @search_query %>"
+            placeholder="Pesquisar por TOTVS, Nome ou Município..."
+            class="w-full h-11 bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 text-xs sm:text-sm rounded-xl pl-4 pr-20 font-semibold outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button type="submit" class="absolute right-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors">
+            Filtrar
+          </button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- Hierarchy Tree Cards Viewport -->
+  <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <h3 class="text-xs font-black text-slate-400 uppercase tracking-wider">
+        Árvore Hierárquica (<%= @selected_state != 'ALL' ? @selected_state : "Todos os Estados" %>)
+      </h3>
+      <span class="text-[10px] text-slate-500 font-bold">
+        Clique no card para abrir/fechar o grupo
+      </span>
+    </div>
+
+    <% if @churches.empty? %>
+      <div class="text-center py-16 text-slate-500 italic text-sm">
+        Nenhuma igreja encontrada para o filtro selecionado.
+      </div>
+    <% else %>
+      <%
+        # Group churches by State
+        by_state = @churches.group_by { |c| c.estado.presence || 'OUTROS' }
+      %>
+
+      <div class="space-y-4">
+        <% by_state.each do |uf, churches_in_uf| %>
+          <details class="group bg-slate-950 border border-slate-800 rounded-xl overflow-hidden transition-all" open>
+            <summary class="flex items-center justify-between p-4 cursor-pointer select-none bg-slate-800/60 hover:bg-slate-800 text-white font-bold text-sm transition-colors">
+              <div class="flex items-center gap-3">
+                <span class="transition-transform group-open:rotate-90 text-indigo-400">▶</span>
+                <span class="w-7 h-7 rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-800 flex items-center justify-center font-mono font-black text-xs">
+                  <%= uf %>
+                </span>
+                <span class="uppercase tracking-wide">Estado de <%= uf %></span>
+                <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                  <%= churches_in_uf.size %> <%= churches_in_uf.size == 1 ? 'igreja' : 'igrejas' %>
+                </span>
+              </div>
+              <span class="text-xs text-slate-400 font-normal hidden sm:inline">Expandir/Recolher</span>
+            </summary>
+
+            <div class="p-4 space-y-2 border-t border-slate-800 bg-slate-950">
+              <% churches_in_uf.each do |church| %>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border border-slate-800 bg-slate-900 hover:border-slate-700 transition-colors gap-3">
+                  <div class="flex items-start gap-3 min-w-0 flex-1">
+                    <div class="w-3 h-3 rounded-full bg-indigo-500 shrink-0 mt-1"></div>
+
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-sm font-bold text-white"><%= church.nome %></span>
+                        <% if church.respond_to?(:codigo_totvs) && church.codigo_totvs.present? %>
+                          <span class="text-[10px] font-mono font-bold bg-slate-800 text-indigo-300 px-2 py-0.5 rounded-md border border-slate-700">
+                            TOTVS: <%= church.codigo_totvs %>
+                          </span>
+                        <% end %>
+                        <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 uppercase">
+                          <%= church.calculated_porte %>
+                        </span>
+                      </div>
+
+                      <p class="text-xs text-slate-400 mt-1">
+                        <%= church.respond_to?(:endereco) ? church.endereco : "" %>
+                        <%= " • #{church.municipio} - #{church.estado}" if church.respond_to?(:municipio) && church.municipio.present? %>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2 shrink-0">
+                    <a href="/patrimonio/<%= church.respond_to?(:codigo_totvs) && church.codigo_totvs.present? ? church.codigo_totvs : church.id %>" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs rounded-lg transition-colors border border-slate-700">
+                      🪑 Patrimônio
+                    </a>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          </details>
+        <% end %>
+      </div>
+    <% end %>
+  </section>
+</div>
