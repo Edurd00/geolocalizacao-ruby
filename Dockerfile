@@ -23,6 +23,7 @@ RUN bundle config set --local deployment 'true' && \
 COPY . .
 
 # Precompilação de assets
+RUN chmod +x bin/*
 RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
 
 # Estágio Final
