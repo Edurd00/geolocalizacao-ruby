@@ -3,8 +3,4 @@ APP_PATH = File.expand_path("../config/application", __dir__)
 
 require_relative "../config/boot"
 
-begin
-  require "rails/commands"
-rescue LoadError => e
-  puts "Rails CLI commands invoked. (Bundle loading fallback)"
-end
+require "rails/commands"

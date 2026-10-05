@@ -21,10 +21,12 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: always
-    command: ./bin/puma -p 3000
+    command: ./bin/rails server -b 0.0.0.0 -p 3000
     environment:
       RAILS_ENV: production
-      DATABASE_URL: postgresql://${DB_USERNAME:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-geovalig_ipda_production}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-geovalig_ipda_production}
       DB_HOST: db
       DB_PORT: 5432
       DB_USERNAME: ${DB_USERNAME:-postgres}
@@ -32,7 +34,7 @@ services:
       DB_NAME: ${DB_NAME:-geovalig_ipda_production}
       RAILS_SERVE_STATIC_FILES: "true"
       RAILS_LOG_TO_STDOUT: "true"
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-production_secret_key_base_geovalig_ipda_2026}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Defina SECRET_KEY_BASE no arquivo .env}
     ports:
       - "3000:3000"
     depends_on:

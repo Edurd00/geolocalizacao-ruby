@@ -1,6 +1,9 @@
 class MapController < ApplicationController
   def index
-    @total_churches_count = Church.count rescue 0
+    @total_churches_count = Church.count
+  rescue ActiveRecord::ActiveRecordError => e
+    Rails.logger.error("Unable to count churches: #{e.class}")
+    @total_churches_count = nil
   end
 
   def locations
@@ -12,7 +15,8 @@ class MapController < ApplicationController
     end
 
     render json: churches.map(&:as_map_json)
-  rescue StandardError => e
-    render json: { error: e.message }, status: :internal_server_error
+  rescue ActiveRecord::ActiveRecordError => e
+    Rails.logger.error("Unable to load map locations: #{e.class}")
+    render json: { error: "Não foi possível carregar os pontos do mapa." }, status: :service_unavailable
   end
 end

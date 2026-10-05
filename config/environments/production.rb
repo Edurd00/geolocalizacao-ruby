@@ -14,12 +14,6 @@ Rails.application.configure do
   # Ensure fallback asset server is enabled if configured
   config.public_file_server.enabled = ENV["RAILS_SERVE_STATIC_FILES"].present?
 
-  # Compress CSS using a preprocessor.
-  config.assets.css_compressor = nil
-
-  # Do not fallback to assets pipeline if a precompiled asset is missed.
-  config.assets.compile = false
-
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
   config.force_ssl = ENV["RAILS_FORCE_SSL"].present?
 

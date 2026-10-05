@@ -1,21 +1,11 @@
 require_relative "boot"
-
-# Minimal Rails require fallback if rails/all gem bundle is not active
-begin
-  require "rails/all"
-rescue LoadError
-  require "rails"
-  require "active_model/railtie"
-  require "active_record/railtie"
-  require "action_controller/railtie"
-  require "action_view/railtie"
-end
+require "rails/all"
 
 module GeovaligIpda
   class Application < Rails::Application
-    config.load_defaults 8.0 rescue nil
+    config.load_defaults 8.0
 
     config.time_zone = "America/Sao_Paulo"
-    config.i18n.default_locale = :"pt-BR" rescue nil
+    config.i18n.default_locale = :"pt-BR"
   end
 end

@@ -1,5 +1,4 @@
 class ValidationController < ApplicationController
-  protect_from_forgery with: :null_session, only: [:extract_coords]
   before_action :set_church, only: [:update]
 
   def show
@@ -7,31 +6,31 @@ class ValidationController < ApplicationController
   end
 
   def update
-    if @church
-      latitude = params[:latitude] || params.dig(:church, :latitude)
-      longitude = params[:longitude] || params.dig(:church, :longitude)
+    latitude = Float(params[:latitude] || params.dig(:church, :latitude), exception: false)
+    longitude = Float(params[:longitude] || params.dig(:church, :longitude), exception: false)
 
-      if latitude.present? && longitude.present?
-        if @church.respond_to?(:latitude=) && @church.respond_to?(:longitude=)
-          @church.latitude = latitude.to_f
-          @church.longitude = longitude.to_f
-        end
-
-        if @church.respond_to?(:status=)
-          @church.status = 'VALIDADO'
-        elsif @church.respond_to?(:validada=)
-          @church.validada = true
-        end
-
-        @church.save rescue nil
-      end
+    unless latitude && longitude && latitude.between?(-90, 90) && longitude.between?(-180, 180) && !(latitude.zero? && longitude.zero?)
+      @church.errors.add(:base, "Informe latitude e longitude válidas.")
+      return render :show, status: :unprocessable_entity
     end
 
-    @next_church = find_next_pending_church
+    unless @church.respond_to?(:latitude=) && @church.respond_to?(:longitude=)
+      @church.errors.add(:base, "A tabela de igrejas ainda não possui campos de coordenadas.")
+      return render :show, status: :unprocessable_entity
+    end
 
-    respond_to do |format|
-      format.turbo_stream
-      format.html { redirect_to validation_path }
+    @church.latitude = latitude
+    @church.longitude = longitude
+    if @church.respond_to?(:status=)
+      @church.status = "VALIDADO"
+    elsif @church.respond_to?(:validada=)
+      @church.validada = true
+    end
+
+    if @church.save
+      redirect_to validation_path, notice: "Coordenadas salvas e igreja validada."
+    else
+      render :show, status: :unprocessable_entity
     end
   end
 
@@ -39,15 +38,16 @@ class ValidationController < ApplicationController
     input_text = params[:url] || params[:text] || params[:link] || ''
     result = ExtractCoordinatesService.new(input_text).call
 
-    render json: result
+    render json: result, status: result[:success] ? :ok : :unprocessable_entity
   rescue StandardError => e
-    render json: { success: false, error: e.message }, status: :internal_server_error
+    Rails.logger.error("Coordinate extraction failed: #{e.class}")
+    render json: { success: false, error: "Não foi possível processar o link informado." }, status: :service_unavailable
   end
 
   private
 
   def set_church
-    @church = Church.find(params[:id]) rescue nil
+    @church = Church.find(params[:id])
   end
 
   def find_next_pending_church
