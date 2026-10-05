@@ -17,12 +17,14 @@ FROM base as build
 
 # Install packages needed to build gems and node assets
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential libpq-dev git pkg-config nodejs npm && \
+    apt-get install --no-install-recommends -y build-essential libpq-dev pkg-config git libyaml-dev nodejs npm && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Install application gems
 COPY Gemfile Gemfile.lock ./
-RUN bundle install && \
+RUN bundle config set --local deployment 'true' && \
+    bundle config set --local without 'development test' && \
+    bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git
 
 # Copy application code
