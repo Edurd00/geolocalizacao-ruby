@@ -1,9 +1,8 @@
 #!/bin/bash
 set -e
 
-# Run db:prepare (executes migrations and seeds safely) before booting the application
-if [ -f bin/rails ]; then
-  ./bin/rails db:prepare
-fi
+# Remove qualquer arquivo de PID antigo do Puma que possa ter ficado preso
+rm -f /rails/tmp/pids/server.pid
 
+# Executa o comando principal do container
 exec "$@"
