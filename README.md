@@ -2,7 +2,7 @@
 
 Sistema de geolocalização e gestão de dados das igrejas IPDA. A interface e os serviços estão em migração de Next.js/TypeScript para Ruby on Rails. O objetivo final é manter páginas, regras de negócio e acesso a dados em Rails, com Leaflet para mapas.
 
-> **Estado da migração (outubro de 2026):** o Rails contém um mapa Leaflet básico e uma tela de validação de coordenadas. Os módulos de gestão, patrimônio, coligações, organização, relatórios e autenticação ainda estão implementados no Next.js; eles ainda não foram migrados. Neste momento, não remova `src/` nem `package.json`: o deploy Rails ainda não substitui todas as funções do sistema.
+> **Estado da migração (outubro de 2026):** já existem páginas e controllers Rails para mapa, validação, patrimônio, coligações, organização e relatórios. Parte das funções ainda é parcial. Gestão cadastral e autenticação ainda dependem do Next.js. Preserve os arquivos `src/` e os manifests do Next.js enquanto essas funções forem necessárias.
 
 ## Para quem está começando
 
@@ -20,12 +20,13 @@ Sistema de geolocalização e gestão de dados das igrejas IPDA. A interface e o
 | --- | --- | --- |
 | Mapa Leaflet e pontos de igrejas | Parcial | `MapController`, `Church` e `public/application.js` |
 | Validação e extração de coordenadas | Parcial | `ValidationController` e `ExtractCoordinatesService` |
-| Gestão de igrejas e contatos | A migrar | Next.js em `src/app/gestao` e `src/app/api/igrejas` |
-| Patrimônio e BI | A migrar | Next.js em `src/app/gestao-patrimonio`, `src/app/patrimonio` e `src/app/api/patrimonio` |
-| Coligações e hierarquia | A migrar | Next.js em `src/app/coligacoes` e `src/app/api/coligacoes` |
-| Organização pública | A migrar | Next.js em `src/app/organizacao` |
-| Relatórios | A migrar | Next.js em `src/app/relatorios` |
-| Login e autorização | A migrar | Next.js em `src/app/login` e `src/app/api/auth` |
+| Gestão de igrejas e contatos | A migrar | Ainda no Next.js em `src/app/gestao` e `src/app/api/igrejas` |
+| Patrimônio | Parcial | Listagem e formulário Rails em `PatrimonioController`; comparar paridade com Next.js |
+| BI patrimonial | A migrar | Dashboard mais completo ainda em `src/app/gestao-patrimonio` e `src/app/api/patrimonio` |
+| Coligações e hierarquia | Parcial | Página de consulta Rails; operações completas ainda dependem do Next.js |
+| Organização pública | Parcial | Página Rails em `OrganizacaoController`; conferir fluxos e filtros com Next.js |
+| Relatórios | Parcial | Métricas Rails em `RelatoriosController`; comparar relatórios/exportações com Next.js |
+| Login e autorização | A migrar | Ainda no Next.js em `src/app/login` e `src/app/api/auth` |
 
 ## Executar para desenvolvimento sem instalar Ruby
 
@@ -58,13 +59,15 @@ Sistema de geolocalização e gestão de dados das igrejas IPDA. A interface e o
 
 4. Para encerrar, pressione `Ctrl+C`; para executar em segundo plano, use `docker compose up --build -d`, e para parar use `docker compose down`.
 
-O serviço PostgreSQL local criado pelo Compose começa vazio. O repositório ainda não inclui migrations ou seeds que criem e preencham a tabela `igrejas`; portanto, para ver dados reais no mapa, configure uma base de dados que tenha o esquema e os dados esperados. Faça backup antes de conectar qualquer ambiente com dados reais. Não use credenciais de produção em desenvolvimento.
+O PostgreSQL local criado pelo Compose começa vazio. Para criar o esquema definido pelas migrations Rails, abra outro terminal e execute `docker compose exec web bin/rails db:prepare`. Isso não carrega dados reais. O seed só importa `backup_igrejas_completo.json` quando esse arquivo existir localmente; ele é ignorado pelo Docker e não deve ser enviado à imagem. Faça backup antes de alterar qualquer banco existente e não use credenciais de produção em desenvolvimento.
 
 ## Deploy de teste
 
 O deploy Rails requer uma imagem Docker com a mesma versão Ruby definida em `Gemfile` e `Dockerfile`, PostgreSQL acessível à aplicação e as variáveis `DATABASE_URL` (ou `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME`) e `SECRET_KEY_BASE` configuradas no provedor. Configure também `RAILS_SERVE_STATIC_FILES=true` e `RAILS_LOG_TO_STDOUT=true`.
 
-O processo Rails atual não executa migrations automaticamente. Como migrations/schema e seeds ainda não estão no repositório, prepare o banco de teste com o esquema compatível antes de iniciar a aplicação. Confirme os logs do serviço web e a rota `/map/locations` no ambiente de teste.
+O processo Rails não executa migrations automaticamente. Para um banco de teste novo, rode `bin/rails db:prepare` como etapa de pre-deploy no provedor. Antes de aplicar migrations a um banco existente, confira `db:migrate:status` e faça backup: a migration inicial cria `igrejas` e pode falhar se a tabela já existir sem estar registrada no histórico de migrations. Confirme os logs do serviço web e a rota `/map/locations` no ambiente de teste.
+
+O arquivo `config.ru` é a entrada Rack que o Puma procura ao iniciar o Rails. O Docker ignora os fontes Next.js, verificações antigas e o backup JSON: eles não são usados pelo processo Rails e não devem ser enviados junto com a imagem. Os arquivos continuam no repositório para apoiar a migração; remova-os do projeto apenas depois da paridade funcional e da revisão dos dados.
 
 ## Estrutura
 

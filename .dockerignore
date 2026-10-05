@@ -11,3 +11,12 @@ log
 next-env.d.ts
 package-lock.json
 bun.lock
+src/
+verification/
+package.json
+next.config.ts
+postcss.config.mjs
+tsconfig.json
+eslint.config.mjs
+export-backup.js
+backup_igrejas_completo.json
