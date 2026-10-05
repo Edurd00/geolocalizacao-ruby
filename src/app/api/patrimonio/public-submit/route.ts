@@ -1,0 +1,133 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { salvarSubmissaoPatrimonio, SalvarPatrimonioInput, verificarSubmissaoAnual } from '@/lib/patrimonio';
+import { revalidatePath } from 'next/cache';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(request: NextRequest) {
+  try {
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Corpo da requisição inválido (JSON esperado).' },
+        { status: 400 }
+      );
+    }
+
+    const {
+      codigo_totvs,
+      nome_responsavel,
+      telefone_responsavel,
+      cargo_responsavel,
+      ano_referencia,
+      observacoes,
+      itens,
+    } = body || {};
+
+    // 1. Validação de TOTVS
+    const cleanTotvs = String(codigo_totvs || '').trim();
+    if (!cleanTotvs) {
+      return NextResponse.json(
+        { success: false, error: 'O código TOTVS da igreja é obrigatório.' },
+        { status: 400 }
+      );
+    }
+
+    // 2. Trava de Duplicidade Anual
+    const anoAtual = Number(ano_referencia) || new Date().getFullYear();
+    const jaEnviado = await verificarSubmissaoAnual(cleanTotvs, anoAtual);
+    if (jaEnviado) {
+      return NextResponse.json(
+        {
+          success: false,
+          ja_enviado: true,
+          mensagem: `Declaração de ${anoAtual} já realizada para este TOTVS.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3. Validação do responsável
+    const cleanNome = String(nome_responsavel || '').trim();
+    if (!cleanNome || cleanNome.length < 2) {
+      return NextResponse.json(
+        { success: false, error: 'Informe o nome completo do responsável pelo preenchimento.' },
+        { status: 400 }
+      );
+    }
+
+    // 4. Validação do telefone com DDD (10 a 11 dígitos numéricos limpos)
+    const cleanTelefone = String(telefone_responsavel || '').replace(/\D/g, '');
+    if (cleanTelefone.length < 10 || cleanTelefone.length > 11) {
+      return NextResponse.json(
+        { success: false, error: 'O telefone deve conter entre 10 e 11 dígitos numéricos com DDD.' },
+        { status: 400 }
+      );
+    }
+
+    // 5. Validação dos itens
+    if (!Array.isArray(itens) || itens.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'É necessário declarar ao menos um item de patrimônio.' },
+        { status: 400 }
+      );
+    }
+
+    const payload: SalvarPatrimonioInput = {
+      codigo_totvs: cleanTotvs,
+      nome_responsavel: cleanNome,
+      telefone_responsavel: cleanTelefone,
+      cargo_responsavel: cargo_responsavel ? String(cargo_responsavel).trim() : 'Dirigente Local',
+      ano_referencia: anoAtual,
+      observacoes: observacoes ? String(observacoes).trim() : null,
+      itens: itens.map((it: any) => {
+        const possuiVal = String(it.possui || 'Sim').trim();
+        const isSim = possuiVal.toLowerCase() === 'sim' || possuiVal.toLowerCase() === 's' || possuiVal.toLowerCase() === 'true';
+        return {
+          item_nome: String(it.item_nome || it.item || it.nome_item || it.descricao || '').trim(),
+          quantidade: isSim ? Math.max(1, Number(it.quantidade ?? it.qtd ?? 1)) : 0,
+          possui: isSim ? 'Sim' : 'Não',
+          conservacao: String(it.conservacao || it.estado_conservacao || it.estado || 'BOM').trim().toUpperCase(),
+          observacao: it.observacao ? String(it.observacao).trim() : null,
+        };
+      }),
+    };
+
+    const resultado = await salvarSubmissaoPatrimonio(payload);
+
+    try {
+      revalidatePath('/gestao-patrimonio');
+      revalidatePath(`/patrimonio/${cleanTotvs}`);
+      revalidatePath(`/api/patrimonio/${cleanTotvs}`);
+      revalidatePath('/api/patrimonio/lista');
+    } catch (revalErr) {
+      console.warn('Revalidation warning:', revalErr);
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Declaração de patrimônio enviada com sucesso!',
+        data: {
+          submissao_id: resultado.submissao_id,
+          codigo_totvs: resultado.codigo_totvs,
+          ano_referencia: resultado.ano_referencia,
+          itens_salvos: resultado.itens_salvos,
+          data_envio: new Date().toISOString(),
+        },
+      },
+      { status: 200 }
+    );
+  } catch (err: any) {
+    console.error('Error in POST /api/patrimonio/public-submit:', err);
+    return NextResponse.json(
+      {
+        success: false,
+        error: err.message || 'Ocorreu um erro interno ao processar a submissão de patrimônio.',
+      },
+      { status: 500 }
+    );
+  }
+}

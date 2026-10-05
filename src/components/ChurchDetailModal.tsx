@@ -1,0 +1,748 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Building2, MapPin, Loader2, Link, User, Phone } from 'lucide-react';
+import { Igreja } from '@/lib/db';
+import { toast } from 'sonner';
+import { PORTE_INFO, getPorte, getDescendantCount, formatLeadershipTenure } from './GeneralMapComponent';
+
+export interface ChurchDetailModalProps {
+  ig: Igreja;
+  igrejas: Igreja[];
+  pontoOrigem: Igreja | null;
+  setPontoOrigem: (ig: Igreja | null) => void;
+  comparisonMode: boolean;
+  setComparisonMode: (val: boolean) => void;
+  fixedDest: Igreja | null;
+  setFixedDest: (ig: Igreja | null) => void;
+  sedeCandidataA: Igreja | null;
+  setSedeCandidataA: (ig: Igreja | null) => void;
+  sedeCandidataB: Igreja | null;
+  setSedeCandidataB: (ig: Igreja | null) => void;
+  connectionPathSource: string | null;
+  isAuthenticated: boolean;
+  handleTraceConnectionMesh: (ig: Igreja) => void;
+  fetchTerrestrialRoute: (origin: Igreja, dest: Igreja, profile?: 'driving' | 'foot') => Promise<boolean>;
+}
+
+export default function ChurchDetailModal({
+  ig,
+  igrejas,
+  pontoOrigem,
+  setPontoOrigem,
+  comparisonMode,
+  setComparisonMode,
+  fixedDest,
+  setFixedDest,
+  sedeCandidataA,
+  setSedeCandidataA,
+  sedeCandidataB,
+  setSedeCandidataB,
+  connectionPathSource,
+  isAuthenticated,
+  handleTraceConnectionMesh,
+  fetchTerrestrialRoute,
+}: ChurchDetailModalProps) {
+  const [activeTab, setActiveTab] = useState<'geral' | 'lideranca' | 'patrimonio' | 'historico'>('geral');
+  const [liderancaData, setLiderancaData] = useState<any>(null);
+  const [loadingLideranca, setLoadingLideranca] = useState<boolean>(false);
+  const [historicoData, setHistoricoData] = useState<any[]>([]);
+  const [loadingHistorico, setLoadingHistorico] = useState<boolean>(false);
+  const [patrimonioData, setPatrimonioData] = useState<any>(null);
+  const [isLoadingPatrimonio, setIsLoadingPatrimonio] = useState<boolean>(false);
+
+  const fetchPatrimonio = async (totvs: string) => {
+    setIsLoadingPatrimonio(true);
+    try {
+      const res = await fetch(`/api/patrimonio/${encodeURIComponent(totvs)}`);
+      const json = await res.json();
+      setPatrimonioData(json.data || null);
+    } catch (err) {
+      console.error('Erro ao buscar patrimônio:', err);
+      setPatrimonioData(null);
+    } finally {
+      setIsLoadingPatrimonio(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'patrimonio' && ig?.codigo_totvs) {
+      fetchPatrimonio(ig.codigo_totvs);
+    }
+  }, [activeTab, ig?.codigo_totvs]);
+
+  // Fetch leadership data dynamically in real time for authenticated users
+  useEffect(() => {
+    if (activeTab === 'lideranca' && ig?.codigo_totvs) {
+      setLoadingLideranca(true);
+      fetch('/api/igrejas/lideranca?totvs=' + encodeURIComponent(ig.codigo_totvs))
+        .then((res) => res.json())
+        .then((resData) => {
+          if (resData.success && resData.data) {
+            setLiderancaData(resData.data);
+          } else {
+            setLiderancaData(null);
+          }
+        })
+        .catch((err) => {
+          console.error('Error fetching leadership data:', err);
+          setLiderancaData(null);
+        })
+        .finally(() => {
+          setLoadingLideranca(false);
+        });
+    }
+  }, [activeTab, ig?.codigo_totvs]);
+
+  // Fetch audit history dynamically when history tab is selected
+  useEffect(() => {
+    if (activeTab === 'historico' && ig?.codigo_totvs) {
+      setLoadingHistorico(true);
+      fetch('/api/igrejas/historico?totvs=' + encodeURIComponent(ig.codigo_totvs))
+        .then((res) => res.json())
+        .then((resData) => {
+          if (resData.success && Array.isArray(resData.data)) {
+            setHistoricoData(resData.data);
+          } else {
+            setHistoricoData([]);
+          }
+        })
+        .catch((err) => {
+          console.error('Error fetching history data:', err);
+          setHistoricoData([]);
+        })
+        .finally(() => {
+          setLoadingHistorico(false);
+        });
+    }
+  }, [activeTab, ig?.codigo_totvs]);
+
+  const porte = ig.porte || getPorte(ig.desc_igreja, ig.porte);
+  const parentChurch = ig.codigo_totvs_pai
+    ? igrejas.find((p) => String(p.codigo_totvs) === String(ig.codigo_totvs_pai))
+    : null;
+  const totalCascata = getDescendantCount(ig.codigo_totvs, igrejas);
+
+  return (
+    <div className="w-[350px] p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden text-slate-800 dark:text-slate-100 space-y-2 font-sans text-xs">
+      {/* Title & Header Badges */}
+      <div>
+        <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug">
+          {ig.desc_igreja}
+        </h3>
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+          <span className="text-[9px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+            TOTVS: {ig.codigo_totvs}
+          </span>
+          <span
+            className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border text-white"
+            style={{
+              backgroundColor: PORTE_INFO[porte]?.color || '#A6A6A6',
+              borderColor: 'rgba(0,0,0,0.1)',
+            }}
+          >
+            {porte}
+          </span>
+          {totalCascata > 0 && (
+            <span className="px-2 py-0.5 bg-indigo-100 dark:bg-slate-800 text-indigo-800 dark:text-indigo-300 text-[10px] font-bold rounded-full border border-indigo-200 dark:border-slate-700 inline-flex items-center gap-1">
+              🏛️ {totalCascata} na malha
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Navigation Tabs (Segmented Control Layout) */}
+      <div className={`grid ${isAuthenticated ? 'grid-cols-4' : 'grid-cols-1'} gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl mt-3`}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('geral')}
+          className={`flex flex-col items-center justify-center py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold transition-all select-none cursor-pointer ${
+            activeTab === 'geral'
+              ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/50 dark:border-slate-600'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 border border-transparent'
+          }`}
+        >
+          <span>📍</span>
+          <span className="mt-0.5">Geral</span>
+        </button>
+        {isAuthenticated && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('lideranca')}
+            className={`flex flex-col items-center justify-center py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold transition-all select-none cursor-pointer ${
+              activeTab === 'lideranca'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/50 dark:border-slate-600'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 border border-transparent'
+            }`}
+          >
+            <span>👥</span>
+            <span className="mt-0.5">Liderança</span>
+          </button>
+        )}
+        {isAuthenticated && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('patrimonio')}
+            className={`flex flex-col items-center justify-center py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold transition-all select-none cursor-pointer ${
+              activeTab === 'patrimonio'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/50 dark:border-slate-600'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 border border-transparent'
+            }`}
+          >
+            <span>🪑</span>
+            <span className="mt-0.5">Patrimônio</span>
+          </button>
+        )}
+        {isAuthenticated && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('historico')}
+            className={`flex flex-col items-center justify-center py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold transition-all select-none cursor-pointer ${
+              activeTab === 'historico'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/50 dark:border-slate-600'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 border border-transparent'
+            }`}
+          >
+            <span>🕒</span>
+            <span className="mt-0.5">Histórico</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tab Content */}
+      <div className="pt-1">
+        {activeTab === 'geral' && (
+          <div className="space-y-1.5 mt-2 text-[11px] leading-tight text-slate-700 dark:text-slate-300">
+            {ig.tipo_imovel && (
+              <p className="flex items-center gap-1.5">
+                <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
+                <span>
+                  <span className="font-semibold text-slate-400 dark:text-slate-400">Tipo de Imóvel:</span>{' '}
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{ig.tipo_imovel}</span>
+                </span>
+              </p>
+            )}
+
+            <p className="flex items-start gap-1.5">
+              <MapPin className="h-3 w-3 text-slate-400 mt-0.5 shrink-0" />
+              <span>
+                <span className="font-semibold text-slate-400 dark:text-slate-400">Endereço:</span>{' '}
+                <span className="text-slate-800 dark:text-slate-200 font-medium">
+                  {ig.endereco}
+                  {ig.bairro ? `, ${ig.bairro}` : ''}, {ig.municipio} - {ig.estado}
+                  {ig.cep ? ` (${ig.cep})` : ''}
+                </span>
+              </span>
+            </p>
+
+            {ig.codigo_totvs_pai && parentChurch && (
+              <p className="flex items-start gap-1.5">
+                <Link className="h-3 w-3 text-slate-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="font-semibold text-slate-400 dark:text-slate-400">Coligada a:</span>{' '}
+                  <span className="text-slate-800 dark:text-slate-200 font-medium">{parentChurch.desc_igreja} ({ig.codigo_totvs_pai})</span>
+                </span>
+              </p>
+            )}
+
+            {((ig.qtd_membros !== null && ig.qtd_membros !== undefined && ig.qtd_membros > 0) ||
+              (ig.qtd_jovens !== null && ig.qtd_jovens !== undefined && ig.qtd_jovens > 0)) && (
+              <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[10px] mt-1.5">
+                <span>👥 {ig.qtd_membros || 0} Membros</span>
+                <span className="text-slate-300 dark:text-slate-600">|</span>
+                <span>⚡ {ig.qtd_jovens || 0} Jovens</span>
+              </div>
+            )}
+
+            <div className="pt-1.5 border-t border-slate-100">
+              {comparisonMode ? (
+                String(fixedDest?.codigo_totvs) === String(ig.codigo_totvs) ? (
+                  <div className="space-y-1.5 my-2">
+                    <div className="h-7 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-center gap-1">
+                      <span>📍 Alvo de Análise</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 my-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setComparisonMode(false);
+                          setFixedDest(null);
+                          setSedeCandidataA(null);
+                          setSedeCandidataB(null);
+                          toast.info('Modo comparativo desativado.');
+                        }}
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-all cursor-pointer"
+                      >
+                        <span className="text-xs">📐</span>
+                        <span className="truncate font-semibold">Cancelar Comp.</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleTraceConnectionMesh(ig)}
+                        className={`flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold border rounded-lg transition-all cursor-pointer ${
+                          String(connectionPathSource) === String(ig.codigo_totvs)
+                            ? 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
+                            : 'text-slate-700 bg-slate-50 hover:bg-slate-100 border-slate-200'
+                        }`}
+                      >
+                        <span className="text-xs">{String(connectionPathSource) === String(ig.codigo_totvs) ? '❌' : '🔗'}</span>
+                        <span className="truncate font-semibold">{String(connectionPathSource) === String(ig.codigo_totvs) ? 'Ocultar Malha' : 'Ver Malha'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 my-2">
+                    <div className="grid grid-cols-2 gap-1.5 my-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSedeCandidataA(ig);
+                          toast.success(`Sede Candidata A definida: ${ig.desc_igreja}`);
+                        }}
+                        className={`flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold border rounded-lg transition-all cursor-pointer ${
+                          String(sedeCandidataA?.codigo_totvs) === String(ig.codigo_totvs)
+                            ? 'border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600'
+                            : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        <span className="text-xs">🟢</span>
+                        <span className="truncate font-semibold">Sede Cand. A</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSedeCandidataB(ig);
+                          toast.success(`Sede Candidata B definida: ${ig.desc_igreja}`);
+                        }}
+                        className={`flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold border rounded-lg transition-all cursor-pointer ${
+                          String(sedeCandidataB?.codigo_totvs) === String(ig.codigo_totvs)
+                            ? 'border-cyan-500 bg-cyan-500 text-white hover:bg-cyan-600'
+                            : 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100 text-cyan-800'
+                        }`}
+                      >
+                        <span className="text-xs">🔵</span>
+                        <span className="truncate font-semibold">Sede Cand. B</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 my-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setComparisonMode(true);
+                          setFixedDest(ig);
+                          setSedeCandidataA(null);
+                          setSedeCandidataB(null);
+                          toast.success(`Novo destino definido: "${ig.desc_igreja}". Selecione as candidatas A e B.`);
+                        }}
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-all cursor-pointer"
+                      >
+                        <span className="text-xs">📐</span>
+                        <span className="truncate font-semibold">Comparar Rotas</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleTraceConnectionMesh(ig)}
+                        className={`flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold border rounded-lg transition-all cursor-pointer ${
+                          String(connectionPathSource) === String(ig.codigo_totvs)
+                            ? 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
+                            : 'text-slate-700 bg-slate-50 hover:bg-slate-100 border-slate-200'
+                        }`}
+                      >
+                        <span className="text-xs">{String(connectionPathSource) === String(ig.codigo_totvs) ? '❌' : '🔗'}</span>
+                        <span className="truncate font-semibold">{String(connectionPathSource) === String(ig.codigo_totvs) ? 'Ocultar Malha' : 'Ver Malha'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <>
+                  {/* Grid 2x2 para os 4 botões de ação */}
+                  <div className="grid grid-cols-2 gap-1.5 my-2">
+                    {/* 1. Rota Superior */}
+                    <button
+                      type="button"
+                      disabled={!(ig.codigo_totvs_pai && parentChurch)}
+                      onClick={() => fetchTerrestrialRoute(ig, parentChurch!)}
+                      className="flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={ig.codigo_totvs_pai && parentChurch ? `Rota para Sede Superior: ${parentChurch.desc_igreja}` : 'Sem coligação superior registrada'}
+                    >
+                      <span className="text-xs">🚗</span>
+                      <span className="truncate font-semibold">Rota Superior</span>
+                    </button>
+
+                    {/* 2. Definir Origem */}
+                    {!pontoOrigem ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPontoOrigem(ig);
+                          toast.success(`Origem definida: ${ig.desc_igreja}`);
+                        }}
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-all cursor-pointer"
+                      >
+                        <span className="text-xs">📍</span>
+                        <span className="truncate font-semibold">Definir Origem</span>
+                      </button>
+                    ) : String(pontoOrigem.codigo_totvs) !== String(ig.codigo_totvs) ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const routeWasCreated = await fetchTerrestrialRoute(pontoOrigem, ig);
+                          if (routeWasCreated) {
+                            setPontoOrigem(null);
+                          }
+                        }}
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold text-emerald-900 dark:text-emerald-300 bg-emerald-50 dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 rounded-lg hover:bg-emerald-100 dark:hover:bg-slate-700 transition-all cursor-pointer shadow-xs"
+                        title={`Traçar rota a partir de ${pontoOrigem.desc_igreja}`}
+                      >
+                        <span className="text-xs">🏁</span>
+                        <span className="truncate font-semibold">Traçar Rota</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPontoOrigem(null);
+                          toast.info('Origem de rota cancelada.');
+                        }}
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-slate-800 border border-rose-200 dark:border-rose-700 rounded-lg hover:bg-rose-100 dark:hover:bg-slate-700 transition-all cursor-pointer"
+                      >
+                        <span className="text-xs">❌</span>
+                        <span className="truncate font-semibold">Cancelar Origem</span>
+                      </button>
+                    )}
+
+                    {/* 3. Comparar Rotas */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setComparisonMode(true);
+                        setFixedDest(ig);
+                        setSedeCandidataA(null);
+                        setSedeCandidataB(null);
+                        toast.success(`Modo Comparativo Ativo! "${ig.desc_igreja}" definido como Destino.`);
+                      }}
+                      className="flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-all cursor-pointer"
+                    >
+                      <span className="text-xs">📐</span>
+                      <span className="truncate font-semibold">Comparar Rotas</span>
+                    </button>
+
+                    {/* 4. Ver Malha */}
+                    <button
+                      type="button"
+                      onClick={() => handleTraceConnectionMesh(ig)}
+                      className={`flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-semibold border rounded-lg transition-all cursor-pointer ${
+                        String(connectionPathSource) === String(ig.codigo_totvs)
+                          ? 'bg-rose-50 dark:bg-slate-800 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-700 hover:bg-rose-100'
+                          : 'text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <span className="text-xs">{String(connectionPathSource) === String(ig.codigo_totvs) ? '❌' : '🔗'}</span>
+                      <span className="truncate font-semibold">{String(connectionPathSource) === String(ig.codigo_totvs) ? 'Ocultar Malha' : 'Ver Malha'}</span>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Botão Principal Roxo Soft UI em Largura Total */}
+              <a
+                href={ig.link_google_maps || `https://www.google.com/maps?q=${ig.latitude},${ig.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-slate-700 border border-indigo-200 dark:border-slate-700 rounded-lg transition-all"
+              >
+                <span>🗺️</span>
+                <span>Abrir no Google Maps ↗</span>
+              </a>
+            </div>
+          </div>
+        )}
+
+        {isAuthenticated && activeTab === 'lideranca' && (
+          <div className="space-y-2">
+            {loadingLideranca ? (
+              <div className="flex items-center justify-center p-6 text-indigo-600 gap-2 font-medium">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Carregando dados de liderança...</span>
+              </div>
+            ) : liderancaData && (liderancaData.dirigente_nome || liderancaData.financeira_nome) ? (
+              <>
+                {liderancaData.dirigente_nome && (
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-lg my-1 text-xs shadow-sm">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-xs truncate flex items-center gap-1">
+                          <span>👔</span> {liderancaData.dirigente_nome}
+                        </p>
+                        <div className="flex items-center gap-1.5 my-1 flex-wrap">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Dirigente Local</span>
+                          <span className="text-slate-300 dark:text-slate-600">•</span>
+                          {liderancaData.tipo_prebenda === 'PREBENDADA' ? (
+                            <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                              💼 Prebendado
+                            </span>
+                          ) : (
+                            <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                              🤝 Voluntário
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {liderancaData.dirigente_data_posse && (
+                      <p className="text-[10px] text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-slate-700 px-2 py-1 rounded border border-indigo-150 dark:border-slate-600 font-bold mt-1.5">
+                        📅 {formatLeadershipTenure(liderancaData.dirigente_data_posse)}
+                      </p>
+                    )}
+
+                    {liderancaData.dirigente_telefone && (
+                      <div className="flex items-center justify-between gap-2 pt-1.5 mt-1.5 border-t border-slate-200/60 dark:border-slate-700">
+                        <a
+                          href={`tel:${liderancaData.dirigente_telefone.replace(/\D/g, '')}`}
+                          className="text-slate-700 dark:text-slate-200 hover:text-blue-600 font-semibold text-[11px] flex items-center gap-1 transition-colors"
+                          title="Clique para ligar"
+                        >
+                          <span>📞</span> {liderancaData.dirigente_telefone}
+                        </a>
+
+                        <a
+                          href={`https://wa.me/55${liderancaData.dirigente_telefone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-2 py-0.5 rounded text-[10px] flex items-center gap-1 transition-colors shrink-0"
+                        >
+                          <span>💬</span> WhatsApp
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {liderancaData.financeira_nome && (
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-lg my-1 text-xs shadow-sm">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-xs truncate flex items-center gap-1">
+                          <span>💰</span> {liderancaData.financeira_nome}
+                        </p>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Voluntária Financeira</span>
+                      </div>
+                    </div>
+
+                    {liderancaData.financeira_telefone && (
+                      <div className="flex items-center justify-between gap-2 pt-1.5 mt-1.5 border-t border-slate-200/60 dark:border-slate-700">
+                        <a
+                          href={`tel:${liderancaData.financeira_telefone.replace(/\D/g, '')}`}
+                          className="text-slate-700 dark:text-slate-200 hover:text-blue-600 font-semibold text-[11px] flex items-center gap-1 transition-colors"
+                          title="Clique para ligar"
+                        >
+                          <span>📞</span> {liderancaData.financeira_telefone}
+                        </a>
+
+                        <a
+                          href={`https://wa.me/55${liderancaData.financeira_telefone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-2 py-0.5 rounded text-[10px] flex items-center gap-1 transition-colors shrink-0"
+                        >
+                          <span>💬</span> WhatsApp
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-slate-400 italic text-xs p-2 text-center">Informação indisponível.</p>
+            )}
+          </div>
+        )}
+
+
+        {isAuthenticated && activeTab === 'patrimonio' && (
+          <div className="space-y-2 py-1">
+            {isLoadingPatrimonio ? (
+              <div className="flex items-center justify-center p-6 text-indigo-600 dark:text-indigo-400 gap-2 font-medium">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Carregando dados de patrimônio...</span>
+              </div>
+            ) : !patrimonioData ? (
+              <div className="p-4 text-center text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700 my-2">
+                <p className="text-xs italic">Nenhum relatório de patrimônio enviado para esta congregação.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {/* Cabeçalho com ano_referencia, nome_responsavel, telefone_responsavel e data_envio */}
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700 rounded-lg text-xs space-y-1 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700 pb-1.5">
+                    <span className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1">
+                      📅 Ref: {patrimonioData.ano_referencia || 'N/A'}
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono">
+                      Envio: {(() => {
+                        const rawDate = patrimonioData.data_envio || patrimonioData.criado_em || patrimonioData.created_at;
+                        if (!rawDate) return '---';
+                        try {
+                          const d = new Date(rawDate);
+                          return isNaN(d.getTime()) ? '---' : d.toLocaleDateString('pt-BR');
+                        } catch {
+                          return '---';
+                        }
+                      })()}
+                    </span>
+                  </div>
+                  <div className="pt-1 text-[11px] text-slate-700 dark:text-slate-300 space-y-0.5">
+                    <p className="flex items-center gap-1">
+                      <User className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span className="font-semibold text-slate-500 dark:text-slate-400">Responsável:</span>{' '}
+                      <strong className="font-bold text-slate-800 dark:text-slate-100">{patrimonioData.nome_responsavel || '---'}</strong>
+                    </p>
+                    {patrimonioData.telefone_responsavel && (
+                      <p className="flex items-center gap-1">
+                        <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                        <span className="font-semibold text-slate-500 dark:text-slate-400">Telefone:</span>{' '}
+                        <span className="text-slate-800 dark:text-slate-200 font-medium">{patrimonioData.telefone_responsavel}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tabela de patrimonio_itens (Apenas itens com possui === 'Sim') */}
+                {(() => {
+                  const validItens = (patrimonioData.patrimonio_itens || []).filter(
+                    (item: any) => String(item.possui || '').trim().toLowerCase() === 'sim'
+                  );
+
+                  if (validItens.length === 0) {
+                    return (
+                      <p className="text-slate-400 italic text-xs p-2 text-center">
+                        Nenhum item marcado como &quot;Sim&quot; neste relatório.
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div className="max-h-[220px] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
+                      <table className="w-full text-left text-[11px]">
+                        <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[9px] border-b border-slate-200 dark:border-slate-700 sticky top-0">
+                          <tr>
+                            <th className="px-2 py-1.5">Item</th>
+                            <th className="px-2 py-1.5 text-center">Quantidade</th>
+                            <th className="px-2 py-1.5">Conservação</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900">
+                          {validItens.map((item: any, idx: number) => (
+                            <tr key={item.id || idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                              <td className="px-2 py-1.5 font-medium">{item.item_nome || item.item || item.nome_item || item.descricao || '---'}</td>
+                              <td className="px-2 py-1.5 text-center">
+                                <span className="bg-indigo-50 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-slate-700 px-1.5 py-0.5 rounded-md font-mono font-bold">
+                                  {item.quantidade ?? item.qtd ?? '---'}
+                                </span>
+                              </td>
+                              <td className="px-2 py-1.5 text-[10px] text-slate-500 dark:text-slate-400 font-medium">{item.conservacao || item.estado_conservacao || item.estado || '---'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+
+        {isAuthenticated && activeTab === 'historico' && (
+          <div className="space-y-3 py-1">
+            {loadingHistorico ? (
+              <div className="flex items-center justify-center p-6 text-indigo-600 gap-2 font-medium">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Carregando histórico de alterações...</span>
+              </div>
+            ) : historicoData && historicoData.length > 0 ? (
+              <div className="border-l-2 border-zinc-200 ml-2 pl-4 space-y-4 my-2 max-h-[280px] overflow-y-auto pr-1">
+                {historicoData.map((item, index) => {
+                  const dateFormatted = item.criado_em
+                    ? new Date(item.criado_em).toLocaleString('pt-BR', {
+                        timeZone: 'America/Sao_Paulo',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '---';
+
+                  const fieldDictionary: Record<string, string> = {
+                    qtd_membros: 'Nº de Membros',
+                    qtd_jovens: 'Nº de Jovens',
+                    dirigente_nome: 'Dirigente',
+                    dirigente_email: 'E-mail do Dirigente',
+                    dirigente_telefone: 'Telefone do Dirigente',
+                    dirigente_data_posse: 'Data de Posse do Dirigente',
+                    financeira_nome: 'Responsável Financeiro',
+                    financeira_email: 'E-mail da Financeira',
+                    financeira_telefone: 'Telefone da Financeira',
+                    tipo_prebenda: 'Tipo de Prebenda',
+                    desc_igreja: 'Nome da Igreja',
+                    porte: 'Porte',
+                    endereco: 'Endereço',
+                    bairro: 'Bairro',
+                    municipio: 'Município',
+                    estado: 'Estado (UF)',
+                    cep: 'CEP',
+                    status: 'Status',
+                    codigo_totvs_pai: 'Sede Coligada (Pai)',
+                    reorganizar_filhas_para: 'Transferência de Filhas'
+                  };
+
+                  const modifiedKeys = item.detalhes && typeof item.detalhes === 'object'
+                    ? Object.keys(item.detalhes).map((k) => fieldDictionary[k] || k)
+                    : [];
+
+                  return (
+                    <div key={item.id || index} className="relative group">
+                      {/* Timeline Node Dot */}
+                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-indigo-600 border-2 border-white shadow-xs" />
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-1 text-[10px] text-zinc-500 font-mono">
+                          <span>{dateFormatted}</span>
+                          <span className="bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded uppercase border border-indigo-150">
+                            {item.acao || 'ALTERAÇÃO'}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-zinc-800 dark:text-slate-200 leading-snug">
+                          👤 <strong className="font-bold text-zinc-950 dark:text-white">{item.usuario_nome || 'Usuário'}</strong> realizou uma alteração
+                        </p>
+
+                        {modifiedKeys.length > 0 && (
+                          <p className="text-xs text-zinc-800 dark:text-slate-200 mt-1">
+                            Atualizou: <span className="font-semibold">{modifiedKeys.join(', ')}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-slate-400 italic text-xs p-4 text-center">
+                Nenhuma alteração registrada ainda.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,1118 @@
+import { pool, getIgrejas, saveIgrejaSingle } from './db';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  'https://tvhclmidfphwsimnsewr.supabase.co';
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  '';
+
+const getSupabaseClient = () => {
+  if (!supabaseKey) return null;
+  try {
+    return createClient(supabaseUrl, supabaseKey);
+  } catch {
+    return null;
+  }
+};
+
+export interface SalvarPatrimonioItemInput {
+  item_nome: string;
+  quantidade: number;
+  possui: string; // 'Sim' | 'Não'
+  conservacao?: string; // 'ÓTIMO' | 'BOM' | 'REGULAR' | 'RUIM'
+  observacao?: string | null;
+}
+
+export interface SalvarPatrimonioInput {
+  codigo_totvs: string;
+  nome_responsavel: string;
+  telefone_responsavel: string;
+  cargo_responsavel?: string | null;
+  ano_referencia?: number;
+  observacoes?: string | null;
+  itens: SalvarPatrimonioItemInput[];
+}
+
+export interface IgrejaInfoPublica {
+  codigo_totvs: string;
+  desc_igreja: string;
+  endereco: string;
+  bairro: string;
+  municipio: string;
+  estado: string;
+  cep: string;
+  porte?: string | null;
+  dirigente_nome?: string | null;
+  dirigente_telefone?: string | null;
+}
+
+// In-Memory fallback store
+interface MemoryPatrimonioSubmissao {
+  id: string | number;
+  codigo_totvs: string;
+  nome_responsavel: string;
+  telefone_responsavel: string;
+  ano_referencia: number;
+  data_envio: string;
+  observacoes?: string | null;
+  criado_em: string;
+}
+
+interface MemoryPatrimonioItem {
+  id: string | number;
+  submissao_id: string | number;
+  item_nome: string;
+  quantidade: number;
+  possui: string;
+  conservacao?: string | null;
+  estado_conservacao?: string | null;
+  observacao?: string | null;
+}
+
+const memorySubmissoes: MemoryPatrimonioSubmissao[] = [];
+const memoryItens: MemoryPatrimonioItem[] = [];
+
+/**
+ * Garante as tabelas de patrimônio no PostgreSQL se ainda não existirem
+ */
+let tablesEnsured = false;
+async function ensurePatrimonioTables() {
+  if (tablesEnsured || !pool) return;
+  try {
+    const ddl = `
+      CREATE TABLE IF NOT EXISTS patrimonio_submissoes (
+        id SERIAL PRIMARY KEY,
+        codigo_totvs VARCHAR(50) NOT NULL,
+        nome_responsavel VARCHAR(255),
+        telefone_responsavel VARCHAR(50),
+        ano_referencia INT DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
+        data_envio TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        observacoes TEXT,
+        criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS patrimonio_itens (
+        id SERIAL PRIMARY KEY,
+        submissao_id INT NOT NULL,
+        item_nome VARCHAR(255) NOT NULL,
+        quantidade NUMERIC DEFAULT 1,
+        possui VARCHAR(20) DEFAULT 'Sim',
+        conservacao VARCHAR(50),
+        observacao TEXT,
+        criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_patrimonio_submissoes_totvs ON patrimonio_submissoes (codigo_totvs);
+      CREATE INDEX IF NOT EXISTS idx_patrimonio_itens_submissao ON patrimonio_itens (submissao_id);
+    `;
+    await pool.query(ddl);
+    tablesEnsured = true;
+  } catch (err) {
+    console.error('Erro ao verificar/criar tabelas de patrimônio:', err);
+  }
+}
+
+export interface IgrejaMinimaPublica {
+  codigo_totvs: string;
+  desc_igreja: string;
+  endereco: string;
+  bairro: string;
+  municipio: string;
+  estado: string;
+}
+
+/**
+ * Retorna exclusivamente os dados mínimos de endereço público da igreja.
+ * Não retorna telefones, e-mails ou nomes de dirigentes antigos.
+ */
+export async function obterIgrejaMinima(totvs: string): Promise<IgrejaMinimaPublica | null> {
+  const cleanTotvs = (totvs || '').trim();
+  if (!cleanTotvs) return null;
+
+  if (pool) {
+    try {
+      const res = await pool.query(
+        `SELECT codigo_totvs, desc_igreja, endereco, bairro, municipio, estado
+         FROM igrejas
+         WHERE LOWER(codigo_totvs) = $1
+         LIMIT 1`,
+        [cleanTotvs]
+      );
+      if (res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return {
+          codigo_totvs: row.codigo_totvs,
+          desc_igreja: row.desc_igreja,
+          endereco: row.endereco || '',
+          bairro: row.bairro || '',
+          municipio: row.municipio || '',
+          estado: row.estado || '',
+        };
+      }
+    } catch (err) {
+      console.error('Postgres error in obterIgrejaMinima:', err);
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('igrejas')
+        .select('codigo_totvs, desc_igreja, endereco, bairro, municipio, estado')
+        .ilike('codigo_totvs', cleanTotvs)
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        const row = data[0];
+        return {
+          codigo_totvs: row.codigo_totvs,
+          desc_igreja: row.desc_igreja,
+          endereco: row.endereco || '',
+          bairro: row.bairro || '',
+          municipio: row.municipio || '',
+          estado: row.estado || '',
+        };
+      }
+    } catch (supaErr) {
+      console.error('Supabase error in obterIgrejaMinima:', supaErr);
+    }
+  }
+
+  // Fallback via getIgrejas
+  try {
+    const list = await getIgrejas({ search: cleanTotvs });
+    const found = list.data.find(
+      (ig) => ig.codigo_totvs.toLowerCase() === cleanTotvs.toLowerCase()
+    );
+    if (found) {
+      return {
+        codigo_totvs: found.codigo_totvs,
+        desc_igreja: found.desc_igreja,
+        endereco: found.endereco || '',
+        bairro: found.bairro || '',
+        municipio: found.municipio || '',
+        estado: found.estado || '',
+      };
+    }
+  } catch (memErr) {
+    console.error('Fallback error in obterIgrejaMinima:', memErr);
+  }
+
+  return null;
+}
+
+/**
+ * Busca os dados da igreja pelo código TOTVS
+ */
+export async function obterIgrejaPorTotvs(totvs: string): Promise<IgrejaInfoPublica | null> {
+  const cleanTotvs = (totvs || '').trim();
+  if (!cleanTotvs) return null;
+
+  if (pool) {
+    try {
+      const res = await pool.query(
+        `SELECT codigo_totvs, desc_igreja, endereco, bairro, municipio, estado, cep, porte, dirigente_nome, dirigente_telefone
+         FROM igrejas
+         WHERE LOWER(codigo_totvs) = $1
+         LIMIT 1`,
+        [cleanTotvs]
+      );
+      if (res.rows && res.rows.length > 0) {
+        return res.rows[0] as IgrejaInfoPublica;
+      }
+    } catch (err) {
+      console.error('Postgres error in obterIgrejaPorTotvs:', err);
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('igrejas')
+        .select('codigo_totvs, desc_igreja, endereco, bairro, municipio, estado, cep, porte, dirigente_nome, dirigente_telefone')
+        .ilike('codigo_totvs', cleanTotvs)
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        return data[0] as IgrejaInfoPublica;
+      }
+    } catch (supaErr) {
+      console.error('Supabase error in obterIgrejaPorTotvs:', supaErr);
+    }
+  }
+
+  // Fallback via getIgrejas
+  try {
+    const list = await getIgrejas({ search: cleanTotvs });
+    const found = list.data.find(
+      (ig) => ig.codigo_totvs.toLowerCase() === cleanTotvs.toLowerCase()
+    );
+    if (found) {
+      return {
+        codigo_totvs: found.codigo_totvs,
+        desc_igreja: found.desc_igreja,
+        endereco: found.endereco || '',
+        bairro: found.bairro || '',
+        municipio: found.municipio || '',
+        estado: found.estado || '',
+        cep: found.cep || '',
+        porte: found.porte || null,
+        dirigente_nome: found.dirigente_nome || null,
+        dirigente_telefone: found.dirigente_telefone || null,
+      };
+    }
+  } catch (memErr) {
+    console.error('Fallback error in obterIgrejaPorTotvs:', memErr);
+  }
+
+  return null;
+}
+
+/**
+ * Busca a última submissão de patrimônio e seus itens para o TOTVS informado
+ */
+export async function obterPatrimonioCompleto(totvs: string) {
+  const cleanTotvs = (totvs || '').trim();
+  if (!cleanTotvs) return null;
+
+  await ensurePatrimonioTables();
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('patrimonio_submissoes')
+        .select('*, patrimonio_itens(*)')
+        .ilike('codigo_totvs', cleanTotvs)
+        .order('ano_referencia', { ascending: false })
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        return data[0];
+      }
+    } catch (err) {
+      console.error('Supabase error in obterPatrimonioCompleto:', err);
+    }
+  }
+
+  if (pool) {
+    try {
+      const query = `
+        SELECT s.*,
+          COALESCE(
+            json_agg(i.*) FILTER (WHERE i.id IS NOT NULL),
+            '[]'::json
+          ) AS patrimonio_itens
+        FROM patrimonio_submissoes s
+        LEFT JOIN patrimonio_itens i ON s.id = i.submissao_id
+        WHERE LOWER(s.codigo_totvs) = $1
+        GROUP BY s.id
+        ORDER BY s.ano_referencia DESC
+        LIMIT 1
+      `;
+      const res = await pool.query(query, [cleanTotvs]);
+      if (res.rows && res.rows.length > 0) {
+        return res.rows[0];
+      }
+    } catch (poolErr) {
+      console.error('Postgres error in obterPatrimonioCompleto:', poolErr);
+    }
+  }
+
+  // Fallback in-memory
+  const sub = memorySubmissoes
+    .filter((s) => s.codigo_totvs === cleanTotvs)
+    .sort((a, b) => b.ano_referencia - a.ano_referencia)[0];
+
+  if (sub) {
+    const itens = memoryItens.filter((i) => i.submissao_id === sub.id);
+    return {
+      ...sub,
+      patrimonio_itens: itens,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Salva ou atualiza a submissão de patrimônio e seus itens
+ */
+export async function salvarSubmissaoPatrimonio(input: SalvarPatrimonioInput): Promise<{
+  submissao_id: string | number;
+  codigo_totvs: string;
+  ano_referencia: number;
+  itens_salvos: number;
+}> {
+  const cleanTotvs = (input.codigo_totvs || '').trim();
+  if (!cleanTotvs) {
+    throw new Error('Código TOTVS da igreja é obrigatório.');
+  }
+
+  const igreja = await obterIgrejaPorTotvs(cleanTotvs);
+  if (!igreja) {
+    throw new Error(`Igreja com código TOTVS "${cleanTotvs}" não encontrada no sistema.`);
+  }
+
+  const anoReferencia = input.ano_referencia || new Date().getFullYear();
+  const nomeResponsavel = (input.nome_responsavel || '').trim();
+  const telefoneResponsavel = (input.telefone_responsavel || '').trim();
+  const observacoes = input.observacoes?.trim() || null;
+  const itens = input.itens || [];
+  await ensurePatrimonioTables();
+
+  // Tentativa 1: PostgreSQL via pool com transação segura (BEGIN / COMMIT)
+  if (pool) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verifica se já existe submissão para este TOTVS no mesmo ano de referência
+      const existingSubRes = await client.query(
+        `SELECT id FROM patrimonio_submissoes WHERE LOWER(codigo_totvs) = $1 AND ano_referencia = $2 LIMIT 1`,
+        [cleanTotvs, anoReferencia]
+      );
+
+      let submissaoId: number;
+
+      if (existingSubRes.rows.length > 0) {
+        submissaoId = existingSubRes.rows[0].id;
+        await client.query(
+          `UPDATE patrimonio_submissoes
+           SET nome_responsavel = $1,
+               telefone_responsavel = $2,
+               data_envio = CURRENT_TIMESTAMP,
+               observacoes = $3,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $4`,
+          [nomeResponsavel, telefoneResponsavel, observacoes, submissaoId]
+        );
+
+        // Remove itens antigos para reinserção limpa e atualizada
+        await client.query(`DELETE FROM patrimonio_itens WHERE submissao_id = $1`, [submissaoId]);
+      } else {
+        const insertSubRes = await client.query(
+          `INSERT INTO patrimonio_submissoes (
+             codigo_totvs, nome_responsavel, telefone_responsavel, ano_referencia, data_envio, observacoes
+           ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
+           RETURNING id`,
+          [cleanTotvs, nomeResponsavel, telefoneResponsavel, anoReferencia, observacoes]
+        );
+        submissaoId = insertSubRes.rows[0].id;
+      }
+
+      // Inserção dos itens
+      let itensCount = 0;
+      for (const item of itens) {
+        const itemNome = (item.item_nome || '').trim();
+        if (!itemNome) continue;
+
+        const qtd = Number(item.quantidade) || 1;
+        const possui = item.possui?.trim() || 'Sim';
+        const conservacao = item.conservacao?.trim() || 'BOM';
+        const obs = item.observacao?.trim() || null;
+
+        await client.query(
+          `INSERT INTO patrimonio_itens (submissao_id, item_nome, quantidade, possui, conservacao, estado_conservacao, observacao)
+           VALUES ($1, $2, $3, $4, $5, $5, $6)`,
+          [submissaoId, itemNome, qtd, possui, conservacao, obs]
+        );
+        itensCount++;
+      }
+
+      // Sincronização condicional do contato do dirigente na tabela public.igrejas
+      // APENAS SE dirigente_nome ou dirigente_telefone estiverem nulos ou vazios
+      await client.query(
+        `UPDATE public.igrejas
+         SET dirigente_nome = CASE WHEN dirigente_nome IS NULL OR TRIM(dirigente_nome) = '' THEN $1 ELSE dirigente_nome END,
+             dirigente_telefone = CASE WHEN dirigente_telefone IS NULL OR TRIM(dirigente_telefone) = '' THEN $2 ELSE dirigente_telefone END,
+             updated_at = NOW()
+         WHERE LOWER(codigo_totvs) = LOWER($3)
+           AND ((dirigente_nome IS NULL OR TRIM(dirigente_nome) = '') OR (dirigente_telefone IS NULL OR TRIM(dirigente_telefone) = ''))`,
+        [nomeResponsavel, telefoneResponsavel, cleanTotvs]
+      );
+
+      await client.query('COMMIT');
+
+      return {
+        submissao_id: submissaoId,
+        codigo_totvs: cleanTotvs,
+        ano_referencia: anoReferencia,
+        itens_salvos: itensCount,
+      };
+    } catch (pgErr) {
+      await client.query('ROLLBACK');
+      console.error('Erro na transação Postgres de patrimônio:', pgErr);
+      throw pgErr;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Tentativa 2: Supabase Client
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data: existingSub } = await supabase
+        .from('patrimonio_submissoes')
+        .select('id')
+        .ilike('codigo_totvs', cleanTotvs)
+        .eq('ano_referencia', anoReferencia)
+        .limit(1);
+
+      let submissaoId: string | number;
+
+      if (existingSub && existingSub.length > 0) {
+        submissaoId = existingSub[0].id;
+        await supabase
+          .from('patrimonio_submissoes')
+          .update({
+            nome_responsavel: nomeResponsavel,
+            telefone_responsavel: telefoneResponsavel,
+            data_envio: new Date().toISOString(),
+            observacoes,
+          })
+          .eq('id', submissaoId);
+
+        await supabase.from('patrimonio_itens').delete().eq('submissao_id', submissaoId);
+      } else {
+        const { data: insertedSub, error: insertErr } = await supabase
+          .from('patrimonio_submissoes')
+          .insert({
+            codigo_totvs: cleanTotvs,
+            nome_responsavel: nomeResponsavel,
+            telefone_responsavel: telefoneResponsavel,
+            ano_referencia: anoReferencia,
+            data_envio: new Date().toISOString(),
+            observacoes,
+          })
+          .select('id')
+          .single();
+
+        if (insertErr || !insertedSub) {
+          throw new Error(insertErr?.message || 'Falha ao inserir submissão no Supabase');
+        }
+        submissaoId = insertedSub.id;
+      }
+
+      const rowsToInsert = itens
+        .filter((it) => Boolean(it.item_nome && it.item_nome.trim()))
+        .map((it) => ({
+          submissao_id: submissaoId,
+          item_nome: it.item_nome.trim(),
+          quantidade: Number(it.quantidade) || 1,
+          possui: it.possui?.trim() || 'Sim',
+          conservacao: it.conservacao?.trim() || 'BOM',
+          estado_conservacao: it.conservacao?.trim() || 'BOM',
+          observacao: it.observacao?.trim() || null,
+        }));
+
+      if (rowsToInsert.length > 0) {
+        const { error: itemsErr } = await supabase.from('patrimonio_itens').insert(rowsToInsert);
+        if (itemsErr) {
+          console.warn('Aviso ao inserir itens no Supabase:', itemsErr);
+        }
+      }
+
+      // Sincroniza o dirigente na tabela igrejas no Supabase se estiver nulo ou vazio
+      if (nomeResponsavel) {
+        try {
+          const { data: curIg } = await supabase
+            .from('igrejas')
+            .select('dirigente_nome, dirigente_telefone')
+            .ilike('codigo_totvs', cleanTotvs)
+            .limit(1);
+
+          if (curIg && curIg.length > 0) {
+            const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+            if (!curIg[0].dirigente_nome || !curIg[0].dirigente_nome.trim()) {
+              updates.dirigente_nome = nomeResponsavel;
+            }
+            if (!curIg[0].dirigente_telefone || !curIg[0].dirigente_telefone.trim()) {
+              updates.dirigente_telefone = telefoneResponsavel;
+            }
+            if (Object.keys(updates).length > 1) {
+              await supabase
+                .from('igrejas')
+                .update(updates)
+                .ilike('codigo_totvs', cleanTotvs);
+            }
+          }
+        } catch (dirErr) {
+          console.warn('Aviso ao atualizar dirigente no Supabase:', dirErr);
+        }
+      }
+
+      return {
+        submissao_id: submissaoId,
+        codigo_totvs: cleanTotvs,
+        ano_referencia: anoReferencia,
+        itens_salvos: rowsToInsert.length,
+      };
+    } catch (supaErr) {
+      console.error('Erro ao salvar no Supabase:', supaErr);
+      throw supaErr;
+    }
+  }
+
+  // Fallback 3: In-Memory DB
+  let subId = `sub_${Date.now()}`;
+  const existingIdx = memorySubmissoes.findIndex(
+    (s) => s.codigo_totvs === cleanTotvs && s.ano_referencia === anoReferencia
+  );
+
+  if (existingIdx !== -1) {
+    subId = String(memorySubmissoes[existingIdx].id);
+    memorySubmissoes[existingIdx] = {
+      ...memorySubmissoes[existingIdx],
+      nome_responsavel: nomeResponsavel,
+      telefone_responsavel: telefoneResponsavel,
+      data_envio: new Date().toISOString(),
+      observacoes,
+    };
+    // Remove itens anteriores
+    for (let i = memoryItens.length - 1; i >= 0; i--) {
+      if (memoryItens[i].submissao_id === subId) {
+        memoryItens.splice(i, 1);
+      }
+    }
+  } else {
+    memorySubmissoes.push({
+      id: subId,
+      codigo_totvs: cleanTotvs,
+      nome_responsavel: nomeResponsavel,
+      telefone_responsavel: telefoneResponsavel,
+      ano_referencia: anoReferencia,
+      data_envio: new Date().toISOString(),
+      observacoes,
+      criado_em: new Date().toISOString(),
+    });
+  }
+
+  let itensCount = 0;
+  itens.forEach((it) => {
+    if (!it.item_nome) return;
+    memoryItens.push({
+      id: `item_${Date.now()}_${Math.random()}`,
+      submissao_id: subId,
+      item_nome: it.item_nome.trim(),
+      quantidade: Number(it.quantidade) || 1,
+      possui: it.possui?.trim() || 'Sim',
+      conservacao: it.conservacao?.trim() || 'BOM',
+          estado_conservacao: it.conservacao?.trim() || 'BOM',
+      observacao: it.observacao?.trim() || null,
+    });
+    itensCount++;
+  });
+
+  // Sincroniza dirigente na memória (equivalente ao UPDATE public.igrejas no Postgres)
+  try {
+    await saveIgrejaSingle(
+      { codigo_totvs: cleanTotvs },
+      {
+        dirigente_nome: nomeResponsavel,
+        dirigente_telefone: telefoneResponsavel,
+      }
+    );
+  } catch {
+    // Não-crítico em modo in-memory; ignora silenciosamente
+  }
+
+  return {
+    submissao_id: subId,
+    codigo_totvs: cleanTotvs,
+    ano_referencia: anoReferencia,
+    itens_salvos: itensCount,
+  };
+}
+
+
+/**
+ * Verifica se já existe uma submissão de patrimônio para o TOTVS no ano informado
+ */
+export async function verificarSubmissaoAnual(totvs: string, ano: number = new Date().getFullYear()): Promise<boolean> {
+  const cleanTotvs = (totvs || '').trim();
+  if (!cleanTotvs) return false;
+
+  await ensurePatrimonioTables();
+
+  if (pool) {
+    try {
+      const res = await pool.query(
+        `SELECT id FROM patrimonio_submissoes
+         WHERE LOWER(codigo_totvs) = LOWER($1)
+           AND ano_referencia = EXTRACT(YEAR FROM CURRENT_DATE)
+         LIMIT 1`,
+        [cleanTotvs]
+      );
+      return res.rows.length > 0;
+    } catch (err) {
+      console.error('Postgres error in verificarSubmissaoAnual:', err);
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('patrimonio_submissoes')
+        .select('id')
+        .ilike('codigo_totvs', cleanTotvs)
+        .eq('ano_referencia', ano)
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        return true;
+      }
+    } catch (supaErr) {
+      console.error('Supabase error in verificarSubmissaoAnual:', supaErr);
+    }
+  }
+
+  const found = memorySubmissoes.find(
+    (s) => s.codigo_totvs.toLowerCase() === cleanTotvs.toLowerCase() && s.ano_referencia === ano
+  );
+  return Boolean(found);
+}
+
+
+/**
+ * Corrige manualmente o Código TOTVS de uma submissão de patrimônio existente
+ */
+export async function corrigirTotvsPatrimonio(
+  submissaoId: string | number,
+  novoCodigoTotvs: string
+): Promise<{ success: boolean; message: string }> {
+  const cleanTotvs = (novoCodigoTotvs || '').trim();
+  if (!cleanTotvs) {
+    throw new Error('O novo código TOTVS é obrigatório.');
+  }
+
+  const igreja = await obterIgrejaPorTotvs(cleanTotvs);
+  if (!igreja) {
+    throw new Error(`A congregação com código TOTVS "${cleanTotvs}" não foi encontrada no sistema.`);
+  }
+
+  await ensurePatrimonioTables();
+
+  if (pool) {
+    const res = await pool.query(
+      `UPDATE patrimonio_submissoes
+       SET codigo_totvs = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id`,
+      [cleanTotvs, submissaoId]
+    );
+
+    if (!res.rows || res.rows.length === 0) {
+      throw new Error(`Submissão de patrimônio #${submissaoId} não encontrada.`);
+    }
+
+    return { success: true, message: 'Código TOTVS corrigido com sucesso!' };
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('patrimonio_submissoes')
+      .update({ codigo_totvs: cleanTotvs, updated_at: new Date().toISOString() })
+      .eq('id', submissaoId)
+      .select('id');
+
+    if (error || !data || data.length === 0) {
+      throw new Error(error?.message || `Submissão de patrimônio #${submissaoId} não encontrada.`);
+    }
+
+    return { success: true, message: 'Código TOTVS corrigido com sucesso!' };
+  }
+
+  const sub = memorySubmissoes.find((s) => String(s.id) === String(submissaoId));
+  if (!sub) {
+    throw new Error(`Submissão de patrimônio #${submissaoId} não encontrada.`);
+  }
+  sub.codigo_totvs = cleanTotvs;
+
+  return { success: true, message: 'Código TOTVS corrigido com sucesso!' };
+}
+
+
+/**
+ * Obtém estatísticas e dados agregados de BI do patrimônio
+ */
+export interface EstatisticasPatrimonioFiltros {
+  regiao?: string;
+  estado?: string;
+  sede?: string;
+  porte?: string;
+  estadoItem?: string;
+  page?: number | string;
+  limit?: number | string;
+}
+
+const REGIAO_MAPPING: Record<string, string[]> = {
+  'Sudeste': ['SP', 'MG', 'ES', 'RJ'],
+  'Sul': ['PR', 'RS', 'SC'],
+  'Norte': ['AC', 'AM', 'RO', 'PA', 'AP', 'RR', 'TO'],
+  'Nordeste': ['AL', 'BA', 'CE', 'RN', 'PE', 'PI', 'MA', 'PB', 'SE'],
+  'Centro-Oeste': ['MT', 'DF', 'GO', 'MS'],
+};
+
+/**
+ * Obtém estatísticas, dados agregados de BI e matriz consolidada por congregação
+ */
+export async function obterEstatisticasPatrimonio(
+  options?: string | EstatisticasPatrimonioFiltros
+) {
+  await ensurePatrimonioTables();
+
+  let filtros: EstatisticasPatrimonioFiltros = {};
+  if (typeof options === 'string') {
+    const optUpper = options.trim().toUpperCase();
+    if (optUpper === 'RUIM') {
+      filtros.estadoItem = 'RUIM';
+    } else if (optUpper !== 'ALL' && optUpper !== '') {
+      filtros.estado = options.trim();
+    }
+  } else if (options) {
+    filtros = options;
+  }
+
+  const regiao = (filtros.regiao || '').trim();
+  const estado = (filtros.estado || '').trim();
+  const sede = (filtros.sede || '').trim();
+  const porte = (filtros.porte || '').trim();
+  const estadoItem = (filtros.estadoItem || '').trim().toUpperCase();
+  const apenasRuim = estadoItem === 'RUIM';
+
+  if (pool) {
+    try {
+      let cte = '';
+      let baseFromIgrejas = 'igrejas i';
+      const params: any[] = [];
+      let paramIdx = 1;
+
+      if (sede && sede !== 'ALL') {
+        cte = `WITH RECURSIVE hierarchy AS (
+          SELECT codigo_totvs FROM igrejas WHERE LOWER(codigo_totvs) = LOWER($${paramIdx})
+          UNION
+          SELECT ig.codigo_totvs FROM igrejas ig INNER JOIN hierarchy h ON LOWER(ig.codigo_totvs_pai) = LOWER(h.codigo_totvs)
+        )`;
+        baseFromIgrejas = `hierarchy h JOIN igrejas i ON LOWER(h.codigo_totvs) = LOWER(i.codigo_totvs)`;
+        params.push(sede);
+        paramIdx++;
+      }
+
+      let whereIgreja = `WHERE i.status != 'DESATIVADO'`;
+
+      // Regiao / Estado filter
+      let ufsToFilter: string[] = [];
+      if (estado && estado !== 'ALL') {
+        ufsToFilter = estado.split(',').map((u) => u.trim()).filter(Boolean);
+      } else if (regiao && regiao !== 'ALL' && REGIAO_MAPPING[regiao]) {
+        ufsToFilter = REGIAO_MAPPING[regiao];
+      }
+
+      if (ufsToFilter.length === 1) {
+        whereIgreja += ` AND i.estado = $${paramIdx}`;
+        params.push(ufsToFilter[0]);
+        paramIdx++;
+      } else if (ufsToFilter.length > 1) {
+        const placeholders = ufsToFilter.map((_, idx) => `$${paramIdx + idx}`).join(',');
+        whereIgreja += ` AND i.estado IN (${placeholders})`;
+        params.push(...ufsToFilter);
+        paramIdx += ufsToFilter.length;
+      }
+
+      // Porte filter
+      if (porte && porte !== 'ALL') {
+        if (porte === 'LOCAL') {
+          whereIgreja += ` AND (i.porte = 'LOCAL' OR (i.porte IS NULL AND UPPER(i.desc_igreja) NOT LIKE '%ESTADUAL%' AND UPPER(i.desc_igreja) NOT LIKE '%SETORIAL%' AND UPPER(i.desc_igreja) NOT LIKE '%CENTRAL%' AND UPPER(i.desc_igreja) NOT LIKE '%REGIONAL%'))`;
+        } else {
+          whereIgreja += ` AND (i.porte = $${paramIdx} OR (i.porte IS NULL AND UPPER(i.desc_igreja) LIKE $${paramIdx + 1}))`;
+          params.push(porte, `%${porte}%`);
+          paramIdx += 2;
+        }
+      }
+
+      // Filter condition for items (only declared items with quantity > 0)
+      let itemFilterClause = `WHERE pi.quantidade > 0 AND (ps.ano_referencia = 2026 OR ps.ano_referencia IS NULL)`;
+      if (apenasRuim) {
+        itemFilterClause += ` AND UPPER(TRIM(COALESCE(pi.conservacao, pi.estado_conservacao, 'REGULAR'))) = 'RUIM'`;
+      }
+
+      // 1. Totals query
+      const totalsQuery = `${cte}
+        SELECT
+          COALESCE((
+            SELECT SUM(pi.quantidade)
+            FROM ${baseFromIgrejas}
+            JOIN patrimonio_submissoes ps ON LOWER(i.codigo_totvs) = LOWER(ps.codigo_totvs)
+            JOIN patrimonio_itens pi ON ps.id = pi.submissao_id
+            ${whereIgreja} ${itemFilterClause.replace('WHERE', 'AND')}
+          ), 0)::int AS total_itens,
+
+          COALESCE((
+            SELECT SUM(pi.quantidade)
+            FROM ${baseFromIgrejas}
+            JOIN patrimonio_submissoes ps ON LOWER(i.codigo_totvs) = LOWER(ps.codigo_totvs)
+            JOIN patrimonio_itens pi ON ps.id = pi.submissao_id
+            ${whereIgreja} AND UPPER(TRIM(COALESCE(pi.conservacao, pi.estado_conservacao, 'REGULAR'))) = 'RUIM'
+              AND pi.quantidade > 0
+              AND (ps.ano_referencia = 2026 OR ps.ano_referencia IS NULL)
+          ), 0)::int AS estado_ruim,
+
+          COALESCE((
+            SELECT COUNT(DISTINCT ps.id)::int
+            FROM ${baseFromIgrejas}
+            JOIN patrimonio_submissoes ps ON LOWER(i.codigo_totvs) = LOWER(ps.codigo_totvs)
+            ${whereIgreja} AND (ps.ano_referencia = 2026 OR ps.ano_referencia IS NULL)
+          ), 0) AS total_submissoes,
+
+          COALESCE((
+            SELECT COUNT(DISTINCT ps.id)::int
+            FROM ${baseFromIgrejas}
+            JOIN patrimonio_submissoes ps ON LOWER(i.codigo_totvs) = LOWER(ps.codigo_totvs)
+            ${whereIgreja} AND ps.data_envio >= NOW() - INTERVAL '7 days'
+          ), 0) AS submissoes_ultimos_7_dias,
+
+          COALESCE((
+            SELECT COUNT(DISTINCT i.codigo_totvs)::int
+            FROM ${baseFromIgrejas}
+            ${whereIgreja}
+          ), 0) AS total_igrejas_ativas
+      `;
+
+      // 2. Categories distribution query
+      const categoriesQuery = `${cte}
+        SELECT
+          CASE 
+            WHEN UPPER(pi.item_nome) LIKE '%BANCO%' OR UPPER(pi.item_nome) LIKE '%CADEIRA%' OR UPPER(pi.item_nome) LIKE '%MESA%' OR UPPER(pi.item_nome) LIKE '%ARMÁRIO%' OR UPPER(pi.item_nome) LIKE '%BEBEDOURO%' OR UPPER(pi.item_nome) LIKE '%PÚLPITO%' OR UPPER(pi.item_nome) LIKE '%COFRE%' THEN 'Mobiliário e Estrutura'
+            WHEN UPPER(pi.item_nome) LIKE '%AR CONDICIONADO%' OR UPPER(pi.item_nome) LIKE '%VENTILADOR%' OR UPPER(pi.item_nome) LIKE '%TELEVISÃO%' OR UPPER(pi.item_nome) LIKE '%PROJETOR%' OR UPPER(pi.item_nome) LIKE '%COMPUTADOR%' THEN 'Eletrônicos e Climatização'
+            WHEN UPPER(pi.item_nome) LIKE '%SOM%' OR UPPER(pi.item_nome) LIKE '%MICROFONE%' OR UPPER(pi.item_nome) LIKE '%CAIXA%' OR UPPER(pi.item_nome) LIKE '%INSTRUMENTO%' OR UPPER(pi.item_nome) LIKE '%TECLADO%' OR UPPER(pi.item_nome) LIKE '%VIOLÃO%' THEN 'Som e Instrumentos'
+            WHEN UPPER(pi.item_nome) LIKE '%FOGÃO%' OR UPPER(pi.item_nome) LIKE '%GELADEIRA%' OR UPPER(pi.item_nome) LIKE '%FREEZER%' OR UPPER(pi.item_nome) LIKE '%CÂMERA%' OR UPPER(pi.item_nome) LIKE '%ALARME%' THEN 'Cozinha e Segurança'
+            ELSE 'Adicionais e Outros'
+          END AS categoria,
+          SUM(pi.quantidade)::int AS total
+        FROM ${baseFromIgrejas}
+        JOIN patrimonio_submissoes ps ON LOWER(i.codigo_totvs) = LOWER(ps.codigo_totvs)
+        JOIN patrimonio_itens pi ON ps.id = pi.submissao_id
+        ${whereIgreja} ${itemFilterClause.replace('WHERE', 'AND')}
+        GROUP BY categoria
+        ORDER BY total DESC
+      `;
+
+      // 3. Conservation status query (Strict 4 official categories: 'Ótimo', 'Bom', 'Regular', 'Ruim')
+      const conservationQuery = `${cte}
+        SELECT 
+          CASE 
+            WHEN UPPER(TRIM(COALESCE(pi.conservacao, pi.estado_conservacao, 'REGULAR'))) IN ('OTIMO', 'ÓTIMO') THEN 'Ótimo'
+            WHEN UPPER(TRIM(COALESCE(pi.conservacao, pi.estado_conservacao, 'REGULAR'))) = 'BOM' THEN 'Bom'
+            WHEN UPPER(TRIM(COALESCE(pi.conservacao, pi.estado_conservacao, 'REGULAR'))) = 'RUIM' THEN 'Ruim'
+            ELSE 'Regular'
+          END AS estado,
+          SUM(pi.quantidade)::int AS quantidade
+        FROM ${baseFromIgrejas}
+        JOIN patrimonio_submissoes ps ON LOWER(i.codigo_totvs) = LOWER(ps.codigo_totvs)
+        JOIN patrimonio_itens pi ON ps.id = pi.submissao_id
+        ${whereIgreja} ${itemFilterClause.replace('WHERE', 'AND')}
+        GROUP BY 1
+        ORDER BY quantidade DESC
+      `;
+
+      // Configuração de Paginação
+      const pageNum = Math.max(1, parseInt(String(filtros.page || 1), 10) || 1);
+      const limitNum = Math.max(1, parseInt(String(filtros.limit || 50), 10) || 50);
+      const offset = (pageNum - 1) * limitNum;
+
+      const matrixParams = [...params, limitNum, offset];
+
+      // 4. Matrix query for congregações
+      const matrixQuery = `${cte}
+        SELECT
+          i.codigo_totvs,
+          i.desc_igreja,
+          i.dirigente_nome,
+          i.dirigente_telefone,
+          i.porte,
+          i.estado,
+          i.municipio,
+          ps.id AS submissao_id,
+          ps.data_envio,
+          COALESCE(SUM(CASE WHEN UPPER(pi.item_nome) LIKE '%BANCO%' OR UPPER(pi.item_nome) LIKE '%CADEIRA%' OR UPPER(pi.item_nome) LIKE '%MESA%' OR UPPER(pi.item_nome) LIKE '%ARMÁRIO%' OR UPPER(pi.item_nome) LIKE '%BEBEDOURO%' OR UPPER(pi.item_nome) LIKE '%PÚLPITO%' OR UPPER(pi.item_nome) LIKE '%COFRE%' THEN pi.quantidade ELSE 0 END), 0)::int AS me,
+          COALESCE(SUM(CASE WHEN UPPER(pi.item_nome) LIKE '%AR CONDICIONADO%' OR UPPER(pi.item_nome) LIKE '%VENTILADOR%' OR UPPER(pi.item_nome) LIKE '%TELEVISÃO%' OR UPPER(pi.item_nome) LIKE '%PROJETOR%' OR UPPER(pi.item_nome) LIKE '%COMPUTADOR%' THEN pi.quantidade ELSE 0 END), 0)::int AS ec,
+          COALESCE(SUM(CASE WHEN UPPER(pi.item_nome) LIKE '%SOM%' OR UPPER(pi.item_nome) LIKE '%MICROFONE%' OR UPPER(pi.item_nome) LIKE '%CAIXA%' OR UPPER(pi.item_nome) LIKE '%INSTRUMENTO%' OR UPPER(pi.item_nome) LIKE '%TECLADO%' OR UPPER(pi.item_nome) LIKE '%VIOLÃO%' THEN pi.quantidade ELSE 0 END), 0)::int AS si,
+          COALESCE(SUM(CASE WHEN UPPER(pi.item_nome) LIKE '%FOGÃO%' OR UPPER(pi.item_nome) LIKE '%GELADEIRA%' OR UPPER(pi.item_nome) LIKE '%FREEZER%' OR UPPER(pi.item_nome) LIKE '%CÂMERA%' OR UPPER(pi.item_nome) LIKE '%ALARME%' THEN pi.quantidade ELSE 0 END), 0)::int AS cs,
+          COALESCE(SUM(CASE WHEN NOT (UPPER(pi.item_nome) LIKE '%BANCO%' OR UPPER(pi.item_nome) LIKE '%CADEIRA%' OR UPPER(pi.item_nome) LIKE '%MESA%' OR UPPER(pi.item_nome) LIKE '%ARMÁRIO%' OR UPPER(pi.item_nome) LIKE '%BEBEDOURO%' OR UPPER(pi.item_nome) LIKE '%PÚLPITO%' OR UPPER(pi.item_nome) LIKE '%COFRE%' OR UPPER(pi.item_nome) LIKE '%AR CONDICIONADO%' OR UPPER(pi.item_nome) LIKE '%VENTILADOR%' OR UPPER(pi.item_nome) LIKE '%TELEVISÃO%' OR UPPER(pi.item_nome) LIKE '%PROJETOR%' OR UPPER(pi.item_nome) LIKE '%COMPUTADOR%' OR UPPER(pi.item_nome) LIKE '%SOM%' OR UPPER(pi.item_nome) LIKE '%MICROFONE%' OR UPPER(pi.item_nome) LIKE '%CAIXA%' OR UPPER(pi.item_nome) LIKE '%INSTRUMENTO%' OR UPPER(pi.item_nome) LIKE '%TECLADO%' OR UPPER(pi.item_nome) LIKE '%VIOLÃO%' OR UPPER(pi.item_nome) LIKE '%FOGÃO%' OR UPPER(pi.item_nome) LIKE '%GELADEIRA%' OR UPPER(pi.item_nome) LIKE '%FREEZER%' OR UPPER(pi.item_nome) LIKE '%CÂMERA%' OR UPPER(pi.item_nome) LIKE '%ALARME%') THEN pi.quantidade ELSE 0 END), 0)::int AS ao,
+          COALESCE(SUM(pi.quantidade), 0)::int AS total_geral,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'item_nome', pi.item_nome,
+                'quantidade', pi.quantidade,
+                'estado_conservacao', COALESCE(pi.conservacao, pi.estado_conservacao, 'REGULAR'),
+                'conservacao', COALESCE(pi.conservacao, pi.estado_conservacao, 'REGULAR'),
+                'observacao', pi.observacao
+              )
+            ) FILTER (WHERE pi.id IS NOT NULL AND pi.quantidade > 0),
+            '[]'::json
+          ) AS patrimonio_itens
+        FROM ${baseFromIgrejas}
+        JOIN patrimonio_submissoes ps ON LOWER(i.codigo_totvs) = LOWER(ps.codigo_totvs)
+        LEFT JOIN patrimonio_itens pi ON ps.id = pi.submissao_id AND pi.quantidade > 0 ${apenasRuim ? "AND UPPER(TRIM(COALESCE(pi.conservacao, pi.estado_conservacao, 'REGULAR'))) = 'RUIM'" : ""}
+        ${whereIgreja} AND (ps.ano_referencia = 2026 OR ps.ano_referencia IS NULL)
+        GROUP BY i.codigo_totvs, i.desc_igreja, i.dirigente_nome, i.dirigente_telefone, i.porte, i.estado, i.municipio, ps.id, ps.data_envio
+        ORDER BY total_geral DESC, i.desc_igreja ASC
+        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+      `;
+
+      const [totalsRes, categoriesRes, conservationRes, matrixRes] = await Promise.all([
+        pool.query(totalsQuery, params),
+        pool.query(categoriesQuery, params),
+        pool.query(conservationQuery, params),
+        pool.query(matrixQuery, matrixParams),
+      ]);
+
+      const tRow = totalsRes.rows[0] || {};
+      const totalItens = parseInt(tRow.total_itens || "0", 10);
+      const estadoRuim = parseInt(tRow.estado_ruim || "0", 10);
+      const totalSubmissoes = parseInt(tRow.total_submissoes || "0", 10);
+      const submissoes7Dias = parseInt(tRow.submissoes_ultimos_7_dias || "0", 10);
+      const totalIgrejasAtivas = parseInt(tRow.total_igrejas_ativas || "0", 10);
+
+      const mediaPorTemplo = totalSubmissoes > 0 ? Math.round((totalItens / totalSubmissoes) * 10) / 10 : 0;
+      const percentualCobertura = totalIgrejasAtivas > 0 ? Math.round((totalSubmissoes / totalIgrejasAtivas) * 100) : 0;
+      const totalPages = Math.ceil(totalSubmissoes / limitNum) || 1;
+
+      const metaObj = {
+        total: totalSubmissoes,
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+      };
+
+      const categoriasFormatted = categoriesRes.rows.map((row) => ({
+        nome: row.categoria,
+        total: parseInt(row.total || "0", 10),
+        item_nome: row.categoria,
+        quantidade: parseInt(row.total || "0", 10),
+      }));
+
+      const officialCategories = ['Ótimo', 'Bom', 'Regular', 'Ruim'];
+      const rawConservationMap: Record<string, number> = {
+        'Ótimo': 0,
+        'Bom': 0,
+        'Regular': 0,
+        'Ruim': 0,
+      };
+
+      conservationRes.rows.forEach((row) => {
+        const cat = row.estado;
+        const qty = parseInt(row.quantidade || "0", 10);
+        if (cat in rawConservationMap) {
+          rawConservationMap[cat] += qty;
+        } else {
+          rawConservationMap['Regular'] += qty;
+        }
+      });
+
+      const conservacaoFormatted = officialCategories.map((cat) => ({
+        estado: cat,
+        quantidade: rawConservationMap[cat] || 0,
+        conservacao: cat,
+      }));
+
+      const congregacoesMatricial = matrixRes.rows.map((row) => {
+        const itensArr = Array.isArray(row.patrimonio_itens) ? row.patrimonio_itens : [];
+        return {
+          codigo_totvs: row.codigo_totvs,
+          desc_igreja: row.desc_igreja,
+          dirigente_nome: row.dirigente_nome,
+          dirigente_telefone: row.dirigente_telefone,
+          porte: row.porte,
+          estado: row.estado,
+          municipio: row.municipio,
+          submissao_id: row.submissao_id,
+          data_envio: row.data_envio,
+          mobiliario: parseInt(row.me || "0", 10),
+          eletronicos: parseInt(row.ec || "0", 10),
+          som_instrumentos: parseInt(row.si || "0", 10),
+          cozinha_seguranca: parseInt(row.cs || "0", 10),
+          adicionais: parseInt(row.ao || "0", 10),
+          total_geral: parseInt(row.total_geral || "0", 10),
+          patrimonio_itens: itensArr,
+          itens: itensArr,
+        };
+      });
+
+      const totaisObj = {
+        total_itens: totalItens,
+        estado_ruim: estadoRuim,
+        media_por_templo: mediaPorTemplo,
+      };
+
+      const unifiedData = {
+        total_itens: totalItens,
+        estado_ruim: estadoRuim,
+        media_itens_por_templo: mediaPorTemplo,
+        media_por_templo: mediaPorTemplo,
+        total_templos_com_submissao_2026: totalSubmissoes,
+        total_igrejas_ativas: totalIgrejasAtivas,
+        submissoes_2026: totalSubmissoes,
+        submissoes_ultimos_7_dias: submissoes7Dias,
+        percentual_cobertura_2026: percentualCobertura,
+        totais: totaisObj,
+        categorias: categoriasFormatted,
+        conservacao: conservacaoFormatted,
+        itens_por_categoria: categoriasFormatted,
+        itens_por_conservacao: conservacaoFormatted,
+        congregacoes: congregacoesMatricial,
+        meta: metaObj,
+      };
+
+      return {
+        success: true,
+        totais: totaisObj,
+        categorias: categoriasFormatted,
+        conservacao: conservacaoFormatted,
+        congregacoes: congregacoesMatricial,
+        meta: metaObj,
+        data: unifiedData,
+      };
+    } catch (err) {
+      console.error("Erro ao calcular estatísticas do patrimônio no Postgres:", err);
+    }
+  }
+
+  // Fallback REST/Supabase client
+  return {
+    success: true,
+    totais: { total_itens: 0, estado_ruim: 0, media_por_templo: 0 },
+    categorias: [],
+    conservacao: [],
+    congregacoes: [],
+    data: {
+      total_itens: 0,
+      estado_ruim: 0,
+      media_itens_por_templo: 0,
+      media_por_templo: 0,
+      total_templos_com_submissao_2026: 0,
+      total_igrejas_ativas: 0,
+      submissoes_2026: 0,
+      submissoes_ultimos_7_dias: 0,
+      percentual_cobertura_2026: 0,
+      totais: { total_itens: 0, estado_ruim: 0, media_por_templo: 0 },
+      categorias: [],
+      conservacao: [],
+      itens_por_categoria: [],
+      itens_por_conservacao: [],
+      congregacoes: [],
+    },
+  };
+}

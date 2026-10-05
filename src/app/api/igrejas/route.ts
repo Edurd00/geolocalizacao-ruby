@@ -1,0 +1,97 @@
+import { NextResponse } from 'next/server';
+import { getIgrejas, getDistinctStates } from '@/lib/db';
+
+export const revalidate = 86400;
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const estado = searchParams.get('estado') || 'ALL';
+    const status = searchParams.get('status') || 'ALL';
+    const porte = searchParams.get('porte') || 'ALL';
+    const pageParam = searchParams.get('page');
+    const limitParam = searchParams.get('limit');
+    const search = searchParams.get('search') || searchParams.get('q') || '';
+
+    const page = pageParam ? parseInt(pageParam, 10) || 1 : 1;
+    const limit = limitParam === 'ALL' || !limitParam ? 'ALL' : (parseInt(limitParam, 10) || 'ALL');
+
+    const [result, states] = await Promise.all([
+      getIgrejas(
+        { estado, status, porte, page, limit, search },
+        [
+          'id',
+          'codigo_totvs',
+          'desc_igreja',
+          'tipo_imovel',
+          'endereco',
+          'bairro',
+          'municipio',
+          'estado',
+          'cep',
+          'link_google_maps',
+          'latitude',
+          'longitude',
+          'status',
+          'usuario_validador',
+          'validado_por',
+          'validado_em',
+          'observacoes',
+          'codigo_totvs_pai',
+          'porte',
+          'updated_at',
+          'dirigente_nome',
+          'dirigente_telefone',
+          'dirigente_email',
+          'financeira_nome',
+          'financeira_telefone',
+          'financeira_email',
+          'dirigente_data_posse',
+          'qtd_membros',
+          'qtd_jovens',
+          'tipo_prebenda'
+        ]
+      ),
+      getDistinctStates(),
+    ]);
+
+    const igrejasData = result.data.map((igreja: any) => ({
+      ...igreja,
+      dirigente_nome: null,
+      dirigente_telefone: null,
+      dirigente_email: null,
+      financeira_nome: null,
+      financeira_telefone: null,
+      financeira_email: null,
+      tipo_prebenda: null,
+    }));
+
+    return new NextResponse(
+      JSON.stringify({
+        success: true,
+        igrejas: igrejasData,
+        total: result.total,
+        page,
+        limit,
+        states,
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate',
+        },
+      }
+    );
+  } catch (err: unknown) {
+    if ((err as any)?.digest === 'DYNAMIC_SERVER_USAGE' || (err as any)?.message?.includes('Dynamic server usage')) {
+      throw err;
+    }
+    console.error('API Error in GET /api/igrejas:', err);
+    const errMsg = err instanceof Error ? err.message : 'Unknown database error';
+    return NextResponse.json(
+      { success: false, error: errMsg },
+      { status: 500 }
+    );
+  }
+}
