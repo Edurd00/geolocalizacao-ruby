@@ -67,6 +67,8 @@ O deploy Rails requer uma imagem Docker com a mesma versão Ruby definida em `Ge
 
 O processo Rails não executa migrations automaticamente. Para um banco de teste novo, rode `bin/rails db:prepare` como etapa de pre-deploy no provedor. Antes de aplicar migrations a um banco existente, confira `db:migrate:status` e faça backup: a migration inicial cria `igrejas` e pode falhar se a tabela já existir sem estar registrada no histórico de migrations. Confirme os logs do serviço web e a rota `/map/locations` no ambiente de teste.
 
+`config/storage.yml` configura o serviço local do Active Storage, exigido durante o boot do Rails mesmo que o sistema ainda não use anexos. O armazenamento local do Render não é persistente; configure um serviço de objetos persistente antes de habilitar uploads.
+
 O arquivo `config.ru` é a entrada Rack que o Puma procura ao iniciar o Rails. O Docker ignora os fontes Next.js, verificações antigas e o backup JSON: eles não são usados pelo processo Rails e não devem ser enviados junto com a imagem. Os arquivos continuam no repositório para apoiar a migração; remova-os do projeto apenas depois da paridade funcional e da revisão dos dados.
 
 ## Estrutura

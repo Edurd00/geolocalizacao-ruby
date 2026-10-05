@@ -11,6 +11,10 @@ Rails.application.configure do
   config.consider_all_requests_local = false
   config.action_controller.perform_caching = true
 
+  # No attachment uploads are used yet; keep Active Storage configured locally
+  # so Rails can boot. Move this to persistent object storage before using uploads.
+  config.active_storage.service = :local
+
   # Ensure fallback asset server is enabled if configured
   config.public_file_server.enabled = ENV["RAILS_SERVE_STATIC_FILES"].present?
 
