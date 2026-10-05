@@ -38,10 +38,16 @@ COPY --from=build --chown=rails:rails /rails /rails
 
 RUN chmod +x /rails/entrypoint.sh
 
+# Garante que os diretórios de execução existam e tenham permissão total de escrita para o usuário rails
+RUN mkdir -p /rails/tmp/pids /rails/tmp/cache /rails/tmp/sockets /rails/db /rails/log && \
+    chown -R rails:rails /rails/tmp /rails/db /rails/log && \
+    chmod -R 775 /rails/tmp /rails/db /rails/log
+
 ENV RAILS_ENV=production \
     RAILS_LOG_TO_STDOUT=true \
     RAILS_SERVE_STATIC_FILES=true
-USER rails
+
+USER rails:rails
 
 ENTRYPOINT ["/rails/entrypoint.sh"]
 EXPOSE 3000
