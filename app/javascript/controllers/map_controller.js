@@ -1,6 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
+  static targets = ["mapContainer", "filterModal", "stateSelect", "porteSelect", "validadaSelect"]
+
   connect() {
     this.initMap()
     window.addEventListener('resize', () => this.map && this.map.invalidateSize())
@@ -8,7 +10,7 @@ export default class extends Controller {
       if (this.map) {
         this.map.invalidateSize()
       }
-    }, 300)
+    }, 250)
   }
 
   disconnect() {
@@ -18,8 +20,10 @@ export default class extends Controller {
   }
 
   initMap() {
+    const mapElement = this.hasMapContainerTarget ? this.mapContainerTarget : this.element
+
     // Default center on Brazil [-14.235, -51.925]
-    this.map = L.map(this.element, {
+    this.map = L.map(mapElement, {
       center: [-14.235, -51.925],
       zoom: 4,
       zoomControl: true
@@ -57,15 +61,22 @@ export default class extends Controller {
     this.loadLocations()
   }
 
-  async loadLocations() {
+  async loadLocations(params = {}) {
     try {
-      const response = await fetch('/map/locations')
+      const queryString = new URLSearchParams(params).toString()
+      const url = queryString ? `/map/locations?${queryString}` : '/map/locations'
+
+      const response = await fetch(url)
       if (!response.ok) throw new Error('Falha ao carregar pontos do mapa')
 
       const churches = await response.json()
 
+      if (this.markersGroup) {
+        this.map.removeLayer(this.markersGroup)
+      }
+
       // Marker Cluster Group setup
-      const markers = L.markerClusterGroup({
+      this.markersGroup = L.markerClusterGroup({
         chunkedLoading: true,
         spiderfyOnMaxZoom: true,
         showCoverageOnHover: false,
@@ -85,10 +96,10 @@ export default class extends Controller {
 
         const marker = L.marker([lat, lng])
         marker.bindPopup(this.buildPopupContent(church))
-        markers.addLayer(marker)
+        this.markersGroup.addLayer(marker)
       })
 
-      this.map.addLayer(markers)
+      this.map.addLayer(this.markersGroup)
 
       if (bounds.isValid()) {
         this.map.fitBounds(bounds, { padding: [50, 50] })
@@ -96,6 +107,42 @@ export default class extends Controller {
     } catch (error) {
       console.error('Erro ao carregar marcadores do mapa:', error)
     }
+  }
+
+  toggleFilters(e) {
+    if (e) e.preventDefault()
+    if (this.hasFilterModalTarget) {
+      this.filterModalTarget.classList.toggle('hidden')
+    } else {
+      const modal = document.getElementById('filterModal')
+      if (modal) modal.classList.toggle('hidden')
+    }
+  }
+
+  applyFilters(e) {
+    if (e) e.preventDefault()
+    const params = {}
+
+    if (this.hasStateSelectTarget && this.stateSelectTarget.value) {
+      params.estado = this.stateSelectTarget.value
+    }
+    if (this.hasPorteSelectTarget && this.porteSelectTarget.value) {
+      params.porte = this.porteSelectTarget.value
+    }
+    if (this.hasValidadaSelectTarget && this.validadaSelectTarget.value) {
+      params.validada = this.validadaSelectTarget.value
+    }
+
+    this.loadLocations(params)
+  }
+
+  clearFilters(e) {
+    if (e) e.preventDefault()
+    if (this.hasStateSelectTarget) this.stateSelectTarget.value = ""
+    if (this.hasPorteSelectTarget) this.porteSelectTarget.value = ""
+    if (this.hasValidadaSelectTarget) this.validadaSelectTarget.value = ""
+
+    this.loadLocations()
   }
 
   buildPopupContent(church) {
