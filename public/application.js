@@ -1,6 +1,10 @@
 (() => {
   const byId = (id) => document.getElementById(id);
   const validPoint = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
+  const porteColor = (porte) => {
+    const normalized = (porte || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+    return ({ ESTADUAL: "#3b82f6", SETORIAL: "#f59e0b", CENTRAL: "#f97316", REGIONAL: "#10b981", LOCAL: "#a855f7", "CASA DE ORACAO": "#ec4899", "ALDEIA INDIGENA": "#22d3ee" })[normalized] || "#6b7280";
+  };
 
   function initMap() {
     const element = byId("map");
@@ -11,34 +15,62 @@
     satellite.addTo(map);
     L.control.layers({ "Satélite Esri": satellite, OpenStreetMap: osm }).addTo(map);
 
-    const group = L.markerClusterGroup ? L.markerClusterGroup({ chunkedLoading: true, showCoverageOnHover: false }) : L.featureGroup();
+    const group = L.markerClusterGroup ? L.markerClusterGroup({
+      chunkedLoading: true,
+      showCoverageOnHover: false,
+      iconCreateFunction: (cluster) => {
+        const counts = new Map();
+        cluster.getAllChildMarkers().forEach((marker) => counts.set(marker.options.porte, (counts.get(marker.options.porte) || 0) + 1));
+        const porte = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
+        const count = cluster.getChildCount();
+        const size = count < 10 ? 38 : count < 100 ? 44 : 52;
+        return L.divIcon({ html: `<span style="display:flex;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50%;color:#fff;font-weight:800;background:${porteColor(porte)};width:${size}px;height:${size}px;box-shadow:0 2px 8px #0008">${count}</span>`, className: "church-marker-cluster", iconSize: [size, size] });
+      }
+    }) : L.featureGroup();
     group.addTo(map);
 
+    let markerRequestId = 0;
     async function loadMarkers() {
+      const requestId = ++markerRequestId;
       const params = new URLSearchParams();
       const porte = document.querySelector('[data-map-target="porteFilter"]')?.value;
       const validada = document.querySelector('[data-map-target="validadaFilter"]')?.value;
       const query = document.querySelector('[data-map-target="searchInput"]')?.value.trim();
       if (porte) params.set("porte", porte);
       if (validada) params.set("validada", validada);
-      if (query) params.set("query", query);
+      if (query?.length >= 2) params.set("query", query);
       try {
         const response = await fetch(`/map/locations${params.size ? `?${params}` : ""}`, { headers: { Accept: "application/json" } });
         if (!response.ok) throw new Error("Não foi possível carregar os pontos do mapa.");
         const churches = await response.json();
+        if (requestId !== markerRequestId) return;
         group.clearLayers();
         const bounds = [];
         churches.forEach((church) => {
           const lat = Number(church.latitude), lng = Number(church.longitude);
           if (!validPoint(lat, lng)) return;
           bounds.push([lat, lng]);
-          const marker = L.marker([lat, lng]);
+          const porte = church.porte || "";
+          const marker = L.marker([lat, lng], {
+            icon: L.divIcon({ html: `<span style="display:block;background:${porteColor(porte)};width:20px;height:20px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px #0009"></span>`, className: "church-marker-icon", iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12] }),
+            porte
+          });
           const title = document.createElement("strong");
           title.textContent = church.nome || "Igreja IPDA";
-          const details = document.createElement("div");
-          details.textContent = [church.codigo_totvs ? `TOTVS: ${church.codigo_totvs}` : "", church.endereco, church.bairro, church.municipio, church.estado].filter(Boolean).join(" · ");
           const content = document.createElement("div");
-          content.append(title, document.createElement("br"), details);
+          const addLine = (label, value) => {
+            const line = document.createElement("div");
+            line.textContent = `${label}: ${value || "—"}`;
+            content.appendChild(line);
+          };
+          const codeLine = document.createElement("div");
+          title.textContent = `Código TOTVS: ${church.codigo_totvs || "—"}`;
+          codeLine.appendChild(title);
+          content.append(codeLine);
+          addLine("Nome da Igreja", church.nome || "Igreja IPDA");
+          addLine("Porte", porte || "—");
+          addLine("Município/UF", [church.municipio, church.estado].filter(Boolean).join("/") || "—");
+          addLine("Endereço", [church.endereco, church.bairro].filter(Boolean).join(", ") || "—");
           marker.bindPopup(content);
           group.addLayer(marker);
         });

@@ -23,11 +23,15 @@ class MapController < ApplicationController
     end
 
     if params[:query].present?
-      q = "%#{params[:query]}%"
-      if Church.column_names.include?('nome')
-        churches = churches.where("nome ILIKE ? OR codigo_totvs ILIKE ? OR municipio ILIKE ?", q, q, q)
-      elsif Church.column_names.include?('desc_igreja')
-        churches = churches.where("desc_igreja ILIKE ? OR codigo_totvs ILIKE ? OR municipio ILIKE ?", q, q, q)
+      searchable_columns = %w[nome desc_igreja codigo_totvs municipio estado endereco bairro cep porte]
+        .select { |column| Church.column_names.include?(column) }
+
+      if searchable_columns.any?
+        query = "%#{Church.sanitize_sql_like(params[:query].to_s.strip)}%"
+        conditions = searchable_columns.map do |column|
+          "#{Church.connection.quote_column_name(column)} ILIKE :query"
+        end
+        churches = churches.where(conditions.join(" OR "), query: query)
       end
     end
 

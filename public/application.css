@@ -4,6 +4,9 @@
 html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background: #020617; color: #e2e8f0; }
 a { color: inherit; }
 
+.leaflet-div-icon.church-marker-icon,
+.leaflet-div-icon.church-marker-cluster { background: transparent; border: 0; }
+
 /* Leaflet basemap control positioning (top-20 right-6) */
 .leaflet-top.leaflet-right {
   top: 5rem !important;
