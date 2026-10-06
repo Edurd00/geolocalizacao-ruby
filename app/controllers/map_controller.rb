@@ -1,22 +1,39 @@
 class MapController < ApplicationController
   def index
-    @total_churches_count = Church.count
-  rescue ActiveRecord::ActiveRecordError => e
-    Rails.logger.error("Unable to count churches: #{e.class}")
-    @total_churches_count = nil
+    @churches_count = Church.count rescue 0
+    @total_churches_count = @churches_count
   end
 
   def locations
-    churches = Church.all
+    # Seleciona apenas igrejas com coordenadas válidas
+    churches = Church.where.not(latitude: nil).where.not(longitude: nil)
 
-    # Filter valid non-zero latitude/longitude coordinates if columns are present
-    if Church.column_names.include?('latitude') && Church.column_names.include?('longitude')
-      churches = churches.where.not(latitude: [nil, 0], longitude: [nil, 0])
+    # Aplica filtros caso enviados por parâmetros de URL
+    churches = churches.where(estado: params[:estado]) if params[:estado].present?
+    churches = churches.where(porte: params[:porte]) if params[:porte].present?
+
+    if params[:validada].present?
+      is_validada = ActiveModel::Type::Boolean.new.cast(params[:validada])
+      if Church.column_names.include?('validada')
+        churches = churches.where(validada: is_validada)
+      elsif Church.column_names.include?('status')
+        status_val = is_validada ? ['VALIDADO', 'VALIDADA'] : ['PENDENTE']
+        churches = churches.where(status: status_val)
+      end
+    end
+
+    if params[:query].present?
+      q = "%#{params[:query]}%"
+      if Church.column_names.include?('nome')
+        churches = churches.where("nome ILIKE ? OR codigo_totvs ILIKE ? OR municipio ILIKE ?", q, q, q)
+      elsif Church.column_names.include?('desc_igreja')
+        churches = churches.where("desc_igreja ILIKE ? OR codigo_totvs ILIKE ? OR municipio ILIKE ?", q, q, q)
+      end
     end
 
     render json: churches.map(&:as_map_json)
-  rescue ActiveRecord::ActiveRecordError => e
-    Rails.logger.error("Unable to load map locations: #{e.class}")
-    render json: { error: "Não foi possível carregar os pontos do mapa." }, status: :service_unavailable
+  rescue => e
+    Rails.logger.error("Erro ao buscar localizacoes: #{e.message}")
+    render json: []
   end
 end
