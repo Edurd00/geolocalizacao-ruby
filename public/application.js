@@ -14,10 +14,19 @@
     const element = byId("map");
     if (!element || !window.L) return;
     const map = L.map(element, { center: [-14.235, -51.925], zoom: 4 });
-    const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' });
-    const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Tiles &copy; Esri" });
-    satellite.addTo(map);
-    L.control.layers({ "Satélite Esri": satellite, OpenStreetMap: osm }).addTo(map);
+    const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 19,
+      attribution: "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AERO, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+    });
+    const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 });
+    const roads = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 });
+    const satelliteHybrid = L.layerGroup([satellite, labels, roads]);
+    const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+    satelliteHybrid.addTo(map);
+    L.control.layers({ "Satélite (com Ruas e Divisas)": satelliteHybrid, "Mapa Vetorial (OSM)": osm }, null, { position: "topright" }).addTo(map);
 
     const group = L.markerClusterGroup ? L.markerClusterGroup({
       chunkedLoading: false,

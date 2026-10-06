@@ -23,18 +23,27 @@ export default class extends Controller {
   }
 
   initMap() {
-    const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
-    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
+    const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AERO, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    })
+    const esriLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
+    const esriRoads = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
+    const satelliteHybrid = L.layerGroup([esriSat, esriLabels, esriRoads])
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    })
 
     const mapElement = this.hasMapContainerTarget ? this.mapContainerTarget : this.element
 
     this.map = L.map(mapElement, {
       center: [-14.2350, -51.9253],
       zoom: 4,
-      layers: [esriSat]
+      layers: [satelliteHybrid]
     })
 
-    L.control.layers({ "Satélite Esri": esriSat, "Mapa (OSM)": osmLayer }).addTo(this.map)
+    L.control.layers({ "Satélite (com Ruas e Divisas)": satelliteHybrid, "Mapa Vetorial (OSM)": osmLayer }, null, { position: 'topright' }).addTo(this.map)
     this.markerCluster = L.markerClusterGroup({
       chunkedLoading: false,
       animate: false,
