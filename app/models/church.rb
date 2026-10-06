@@ -17,15 +17,7 @@ class Church < ApplicationRecord
 
   # Safe getter for name supporting both 'nome' and 'desc_igreja' columns
   def nome
-    if has_attribute?(:nome) && self[:nome].present?
-      self[:nome]
-    elsif has_attribute?(:desc_igreja)
-      self[:desc_igreja]
-    elsif respond_to?(:desc_igreja)
-      desc_igreja
-    else
-      nil
-    end
+    map_attribute(:nome).presence || map_attribute(:desc_igreja).presence || map_attribute(:name)
   end
 
   # Getter for validada boolean field based on status column or validada attribute
@@ -162,20 +154,31 @@ class Church < ApplicationRecord
 
   # Formats church data for map consumption
   def as_map_json
+    codigo = map_attribute(:codigo_totvs) || map_attribute(:totvs_code)
+    igreja_nome = nome
+
     {
-      id: respond_to?(:id) ? id : nil,
-      codigo_totvs: respond_to?(:codigo_totvs) ? codigo_totvs : nil,
-      nome: nome,
+      id: map_attribute(:id),
+      codigo_totvs: codigo,
+      totvs_code: codigo,
+      nome: igreja_nome,
+      name: igreja_nome,
       porte: calculated_porte,
-      endereco: respond_to?(:endereco) ? endereco : nil,
-      bairro: respond_to?(:bairro) ? bairro : nil,
-      municipio: respond_to?(:municipio) ? municipio : nil,
-      estado: respond_to?(:estado) ? estado : nil,
-      cep: respond_to?(:cep) ? cep : nil,
-      latitude: respond_to?(:latitude) ? latitude : nil,
-      longitude: respond_to?(:longitude) ? longitude : nil,
+      endereco: map_attribute(:endereco),
+      bairro: map_attribute(:bairro),
+      municipio: map_attribute(:municipio),
+      estado: map_attribute(:estado),
+      cep: map_attribute(:cep),
+      latitude: map_attribute(:latitude),
+      longitude: map_attribute(:longitude),
       validada: validada,
-      link_google_maps: respond_to?(:link_google_maps) ? link_google_maps : nil
+      link_google_maps: map_attribute(:link_google_maps)
     }
+  end
+
+  private
+
+  def map_attribute(attribute)
+    has_attribute?(attribute) ? self[attribute] : nil
   end
 end

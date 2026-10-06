@@ -8,12 +8,14 @@ class MapController < ApplicationController
     # Seleciona apenas igrejas com coordenadas válidas
     churches = Church.where.not(latitude: nil).where.not(longitude: nil)
 
-    # Aplica filtros caso enviados por parâmetros de URL
-    churches = churches.where(estado: params[:estado]) if params[:estado].present?
-    churches = churches.where(porte: params[:porte]) if params[:porte].present?
+    estado = params[:estado].to_s.strip
+    porte = params[:porte].to_s.strip
+    churches = churches.where(estado: estado) unless estado.empty?
+    churches = churches.where(porte: porte) unless porte.empty?
 
-    if params[:validada].present?
-      is_validada = ActiveModel::Type::Boolean.new.cast(params[:validada])
+    validada = params[:validada].to_s.strip.downcase
+    if %w[true false].include?(validada)
+      is_validada = validada == 'true'
       if Church.column_names.include?('validada')
         churches = churches.where(validada: is_validada)
       elsif Church.column_names.include?('status')
@@ -22,12 +24,13 @@ class MapController < ApplicationController
       end
     end
 
-    if params[:query].present?
+    query_text = params[:query].to_s.strip
+    unless query_text.empty?
       searchable_columns = %w[nome desc_igreja codigo_totvs municipio estado endereco bairro cep porte]
         .select { |column| Church.column_names.include?(column) }
 
       if searchable_columns.any?
-        query = "%#{Church.sanitize_sql_like(params[:query].to_s.strip)}%"
+        query = "%#{Church.sanitize_sql_like(query_text)}%"
         conditions = searchable_columns.map do |column|
           "#{Church.connection.quote_column_name(column)} ILIKE :query"
         end
@@ -35,9 +38,9 @@ class MapController < ApplicationController
       end
     end
 
-    render json: churches.map(&:as_map_json)
-  rescue => e
+    render json: churches.map(&:as_map_json), content_type: 'application/json'
+  rescue StandardError => e
     Rails.logger.error("Erro ao buscar localizacoes: #{e.message}")
-    render json: []
+    render json: [], status: :internal_server_error, content_type: 'application/json'
   end
 end
