@@ -6,12 +6,18 @@ export default class extends Controller {
   connect() {
     this.initMap()
     this.loadMarkers()
-    window.addEventListener('resize', () => this.map && this.map.invalidateSize())
+    this.handleResize = () => this.map && this.map.invalidateSize()
+    window.addEventListener('resize', this.handleResize)
+    this.invalidateTimeout = setTimeout(() => this.map?.invalidateSize(), 250)
   }
 
   disconnect() {
+    window.removeEventListener('resize', this.handleResize)
+    clearTimeout(this.searchTimeout)
+    clearTimeout(this.invalidateTimeout)
     if (this.map) {
       this.map.remove()
+      this.map = null
     }
   }
 
@@ -40,7 +46,8 @@ export default class extends Controller {
 
   async loadMarkers(params = "") {
     try {
-      const response = await fetch(`/map/locations${params}`)
+      const response = await fetch(`/map/locations${params}`, { headers: { Accept: "application/json" } })
+      if (!response.ok) throw new Error(`Falha ao carregar locais (${response.status})`)
       const locations = await response.json()
 
       // Clear existing markers
@@ -91,7 +98,7 @@ export default class extends Controller {
       })
 
       if (bounds.isValid()) {
-        if (locations.length === 1) {
+        if (markers.length === 1) {
           const center = bounds.getCenter()
           this.map.flyTo([center.lat, center.lng], 16)
           setTimeout(() => {
@@ -100,35 +107,6 @@ export default class extends Controller {
         } else {
           this.map.fitBounds(bounds, { padding: [50, 50] })
         }
-      }
-    } catch (e) {
-      console.error("Erro ao carregar locais:", e)
-    }
-  }
-    try {
-      const response = await fetch(`/map/locations${params}`)
-      const locations = await response.json()
-      if (this.markerCluster) {
-        this.markerCluster.clearLayers()
-      }
-
-      const bounds = L.latLngBounds()
-
-      locations.forEach(loc => {
-        const lat = parseFloat(loc.latitude)
-        const lng = parseFloat(loc.longitude)
-        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-          bounds.extend([lat, lng])
-          const marker = L.marker([lat, lng])
-          const nome = loc.nome || loc.desc_igreja || loc.name || 'Igreja IPDA'
-          const totvs = loc.codigo_totvs || loc.totvs_code || '-'
-          marker.bindPopup(`<b>${totvs}</b><br>${nome}`)
-          this.markerCluster.addLayer(marker)
-        }
-      })
-
-      if (bounds.isValid()) {
-        this.map.fitBounds(bounds, { padding: [50, 50] })
       }
     } catch (e) {
       console.error("Erro ao carregar locais:", e)

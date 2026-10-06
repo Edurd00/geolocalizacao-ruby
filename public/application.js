@@ -11,10 +11,22 @@
     satellite.addTo(map);
     L.control.layers({ "Satélite Esri": satellite, OpenStreetMap: osm }).addTo(map);
 
-    fetch("/map/locations", { headers: { Accept: "application/json" } })
-      .then((response) => { if (!response.ok) throw new Error("Não foi possível carregar os pontos do mapa."); return response.json(); })
-      .then((churches) => {
-        const group = L.markerClusterGroup ? L.markerClusterGroup({ chunkedLoading: true, showCoverageOnHover: false }) : L.featureGroup();
+    const group = L.markerClusterGroup ? L.markerClusterGroup({ chunkedLoading: true, showCoverageOnHover: false }) : L.featureGroup();
+    group.addTo(map);
+
+    async function loadMarkers() {
+      const params = new URLSearchParams();
+      const porte = document.querySelector('[data-map-target="porteFilter"]')?.value;
+      const validada = document.querySelector('[data-map-target="validadaFilter"]')?.value;
+      const query = document.querySelector('[data-map-target="searchInput"]')?.value.trim();
+      if (porte) params.set("porte", porte);
+      if (validada) params.set("validada", validada);
+      if (query) params.set("query", query);
+      try {
+        const response = await fetch(`/map/locations${params.size ? `?${params}` : ""}`, { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error("Não foi possível carregar os pontos do mapa.");
+        const churches = await response.json();
+        group.clearLayers();
         const bounds = [];
         churches.forEach((church) => {
           const lat = Number(church.latitude), lng = Number(church.longitude);
@@ -30,15 +42,31 @@
           marker.bindPopup(content);
           group.addLayer(marker);
         });
-        group.addTo(map);
-        if (bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
-      })
-      .catch((error) => {
-        const notice = document.createElement("p");
-        notice.className = "map-error";
-        notice.textContent = error.message;
-        element.appendChild(notice);
-      });
+        if (bounds.length === 1) {
+          map.flyTo(bounds[0], 16);
+          group.eachLayer((marker) => marker.getLatLng().equals(bounds[0]) && marker.openPopup());
+        } else if (bounds.length) {
+          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    document.querySelectorAll('[data-action~="change->map#applyFilters"]').forEach((input) => input.addEventListener("change", loadMarkers));
+    document.querySelector('[data-action~="click->map#toggleFilters"]')?.addEventListener("click", () => document.querySelector('[data-map-target="filterModal"]')?.classList.toggle("hidden"));
+    document.querySelector('[data-action~="click->map#clearFilters"]')?.addEventListener("click", () => {
+      document.querySelectorAll('[data-map-target="porteFilter"], [data-map-target="validadaFilter"], [data-map-target="searchInput"]').forEach((input) => { input.value = ""; });
+      loadMarkers();
+    });
+    let searchTimeout;
+    document.querySelector('[data-map-target="searchInput"]')?.addEventListener("input", () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(loadMarkers, 400);
+    });
+    window.addEventListener("resize", () => map.invalidateSize());
+    setTimeout(() => map.invalidateSize(), 250);
+    loadMarkers();
   }
 
   function initValidationMap() {
