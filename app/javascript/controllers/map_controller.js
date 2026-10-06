@@ -52,14 +52,13 @@ export default class extends Controller {
       iconCreateFunction: (cluster) => {
         const counts = new Map()
         cluster.getAllChildMarkers().forEach((marker) => {
-          const porte = marker.options.porte || ""
-          counts.set(porte, (counts.get(porte) || 0) + 1)
+          const state = (marker.options.state || "SP").toUpperCase().trim()
+          counts.set(state, (counts.get(state) || 0) + 1)
         })
-        const porte = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0]
-        const color = this.porteColor(porte)
+        const state = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] || "SP"
+        const color = this.RegionColors[state] || "#f59e0b"
         const count = cluster.getChildCount()
-        const size = count < 10 ? 38 : count < 100 ? 44 : 52
-        return L.divIcon({ html: `<span style="display:flex;align-items:center;justify-content:center;background:${color};color:#fff;font-weight:800;border:3px solid #fff;border-radius:50%;width:${size}px;height:${size}px;box-shadow:0 2px 8px #0008">${count}</span>`, className: "church-marker-cluster", iconSize: [size, size] })
+        return L.divIcon({ html: `<div style="background-color:${color}" class="flex h-12 w-12 items-center justify-center rounded-full border-4 border-white text-sm font-extrabold text-white shadow-xl drop-shadow-lg">${count}</div>`, className: "custom-cluster-icon", iconSize: [48, 48] })
       }
     })
     this.map.addLayer(this.markerCluster)
@@ -80,6 +79,16 @@ export default class extends Controller {
       LOCAL: "#64748b",
       "CASA DE ORAÇÃO": "#ec4899",
       "ALDEIA INDÍGENA": "#06b6d4"
+    }
+  }
+
+  get RegionColors() {
+    return {
+      SP: "#f59e0b", MG: "#ea580c", ES: "#dc2626", RJ: "#dc2626",
+      PR: "#2563eb", SC: "#2563eb", RS: "#2563eb",
+      AM: "#059669", PA: "#059669", AC: "#059669", RO: "#059669", RR: "#059669", AP: "#059669", TO: "#059669",
+      MA: "#9333ea", PI: "#9333ea", CE: "#9333ea", RN: "#9333ea", PB: "#9333ea", PE: "#9333ea", AL: "#9333ea", SE: "#9333ea", BA: "#9333ea",
+      MT: "#0891b2", MS: "#0891b2", GO: "#0891b2", DF: "#0891b2"
     }
   }
 
@@ -126,7 +135,8 @@ export default class extends Controller {
 
           bounds.extend([lat, lng])
           const porte = (loc.porte || "LOCAL").toUpperCase().trim()
-          const marker = L.marker([lat, lng], { icon: this.createCustomPin(this.porteColor(porte)) })
+          const state = (loc.estado || "SP").toUpperCase().trim()
+          const marker = L.marker([lat, lng], { icon: this.createCustomPin(this.porteColor(porte)), state })
           marker.options.porte = porte
           marker.bindPopup(() => {
             const content = document.createElement("div")

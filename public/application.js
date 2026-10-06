@@ -5,6 +5,13 @@
     const normalized = (porte || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
     return ({ ESTADUAL: "#3b82f6", SETORIAL: "#eab308", CENTRAL: "#f97316", REGIONAL: "#22c55e", LOCAL: "#64748b", "CASA DE ORACAO": "#ec4899", "ALDEIA INDIGENA": "#06b6d4" })[normalized] || "#64748b";
   };
+  const regionColors = {
+    SP: "#f59e0b", MG: "#ea580c", ES: "#dc2626", RJ: "#dc2626",
+    PR: "#2563eb", SC: "#2563eb", RS: "#2563eb",
+    AM: "#059669", PA: "#059669", AC: "#059669", RO: "#059669", RR: "#059669", AP: "#059669", TO: "#059669",
+    MA: "#9333ea", PI: "#9333ea", CE: "#9333ea", RN: "#9333ea", PB: "#9333ea", PE: "#9333ea", AL: "#9333ea", SE: "#9333ea", BA: "#9333ea",
+    MT: "#0891b2", MS: "#0891b2", GO: "#0891b2", DF: "#0891b2"
+  };
   const customPin = (color) => L.divIcon({
     html: `<div style="width:32px;height:40px;filter:drop-shadow(0 2px 3px #0008)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="32" height="40" fill="${color}"><path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" stroke="#ffffff" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="#ffffff"/><circle cx="12" cy="12" r="3" fill="${color}"/></svg></div>`,
     className: "custom-pin-icon", iconSize: [32, 40], iconAnchor: [16, 40], popupAnchor: [0, -36]
@@ -36,11 +43,14 @@
       removeOutsideVisibleBounds: true,
       iconCreateFunction: (cluster) => {
         const counts = new Map();
-        cluster.getAllChildMarkers().forEach((marker) => counts.set(marker.options.porte, (counts.get(marker.options.porte) || 0) + 1));
-        const porte = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
+        cluster.getAllChildMarkers().forEach((marker) => {
+          const state = (marker.options.state || "SP").toUpperCase().trim();
+          counts.set(state, (counts.get(state) || 0) + 1);
+        });
+        const state = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] || "SP";
         const count = cluster.getChildCount();
-        const size = count < 10 ? 38 : count < 100 ? 44 : 52;
-        return L.divIcon({ html: `<span style="display:flex;align-items:center;justify-content:center;border:3px solid #fff;border-radius:50%;color:#fff;font-weight:800;background:${porteColor(porte)};width:${size}px;height:${size}px;box-shadow:0 2px 8px #0008">${count}</span>`, className: "church-marker-cluster", iconSize: [size, size] });
+        const color = regionColors[state] || "#f59e0b";
+        return L.divIcon({ html: `<div style="background-color:${color};width:48px;height:48px;display:flex;align-items:center;justify-content:center;border:4px solid #fff;border-radius:50%;color:#fff;font-weight:800;font-size:14px;box-shadow:0 2px 8px #0008">${count}</div>`, className: "custom-cluster-icon", iconSize: [48, 48] });
       }
     }) : L.featureGroup();
     group.addTo(map);
@@ -78,7 +88,7 @@
             const porte = (church.porte || "LOCAL").toUpperCase().trim();
             const color = porteColor(porte);
             if (!iconCache.has(color)) iconCache.set(color, customPin(color));
-            const marker = L.marker([lat, lng], { icon: iconCache.get(color), porte });
+            const marker = L.marker([lat, lng], { icon: iconCache.get(color), porte, state: (church.estado || "SP").toUpperCase().trim() });
             marker.bindPopup(() => {
               const content = document.createElement("div");
               const addLine = (label, value, strong = false) => {
