@@ -42,6 +42,72 @@ export default class extends Controller {
     try {
       const response = await fetch(`/map/locations${params}`)
       const locations = await response.json()
+
+      // Clear existing markers
+      if (this.markerCluster) {
+        this.markerCluster.clearLayers()
+      }
+
+      const bounds = L.latLngBounds()
+      const markers = []
+
+      // Helper to map porte to color
+      const porteColorMap = {
+        'ESTADUAL': '#3b82f6',
+        'SETORIAL': '#f59e0b',
+        'CENTRAL': '#f97316',
+        'REGIONAL': '#10b981',
+        'LOCAL': '#a855f7',
+        'CASA DE ORAÇÃO': '#ec4899',
+        'ALDEIA INDÍGENA': '#22d3ee'
+      }
+
+      const createIcon = (porte) => {
+        const color = porteColorMap[porte?.toUpperCase()] || '#6b7280' // fallback neutral
+        const html = `<div style="background-color:${color}; width:20px; height:20px; border-radius:50%; border:2px solid white;"></div>`
+        return L.divIcon({ html, className: '' })
+      }
+
+      locations.forEach(loc => {
+        const lat = parseFloat(loc.latitude)
+        const lng = parseFloat(loc.longitude)
+        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+          bounds.extend([lat, lng])
+          const icon = createIcon(loc.porte)
+          const marker = L.marker([lat, lng], { icon })
+
+          const nome = loc.nome || loc.desc_igreja || loc.name || 'Igreja IPDA'
+          const totvs = loc.codigo_totvs || loc.totvs_code || '-'
+          const porte = loc.porte || '---'
+          const municipio = loc.municipio || ''
+          const estado = loc.estado || ''
+          const endereco = loc.endereco || ''
+
+          const popupContent = `<b>${totvs}</b><br/>${nome}<br/>Porte: ${porte}<br/>${municipio}/${estado}<br/>${endereco}`
+          marker.bindPopup(popupContent)
+          this.markerCluster.addLayer(marker)
+          markers.push(marker)
+        }
+      })
+
+      if (bounds.isValid()) {
+        if (locations.length === 1) {
+          const center = bounds.getCenter()
+          this.map.flyTo([center.lat, center.lng], 16)
+          setTimeout(() => {
+            markers[0].openPopup()
+          }, 500)
+        } else {
+          this.map.fitBounds(bounds, { padding: [50, 50] })
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao carregar locais:", e)
+    }
+  }
+    try {
+      const response = await fetch(`/map/locations${params}`)
+      const locations = await response.json()
       if (this.markerCluster) {
         this.markerCluster.clearLayers()
       }
