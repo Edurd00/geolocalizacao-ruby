@@ -3,8 +3,12 @@
   const validPoint = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
   const porteColor = (porte) => {
     const normalized = (porte || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-    return ({ ESTADUAL: "#3b82f6", SETORIAL: "#f59e0b", CENTRAL: "#f97316", REGIONAL: "#10b981", LOCAL: "#a855f7", "CASA DE ORACAO": "#ec4899", "ALDEIA INDIGENA": "#22d3ee" })[normalized] || "#6b7280";
+    return ({ ESTADUAL: "#3b82f6", SETORIAL: "#eab308", CENTRAL: "#f97316", REGIONAL: "#22c55e", LOCAL: "#64748b", "CASA DE ORACAO": "#ec4899", "ALDEIA INDIGENA": "#06b6d4" })[normalized] || "#64748b";
   };
+  const customPin = (color) => L.divIcon({
+    html: `<div style="width:32px;height:40px;filter:drop-shadow(0 2px 3px #0008)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="32" height="40" fill="${color}"><path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" stroke="#ffffff" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="#ffffff"/><circle cx="12" cy="12" r="3" fill="${color}"/></svg></div>`,
+    className: "custom-pin-icon", iconSize: [32, 40], iconAnchor: [16, 40], popupAnchor: [0, -36]
+  });
 
   function initMap() {
     const element = byId("map");
@@ -30,7 +34,7 @@
     group.addTo(map);
 
     let markerRequestId = 0;
-    async function loadMarkers() {
+    async function loadMarkers(resetView = false) {
       const requestId = ++markerRequestId;
       const params = new URLSearchParams();
       const porte = document.querySelector('[data-map-target="porteFilter"]')?.value;
@@ -50,9 +54,9 @@
           const lat = Number(church.latitude), lng = Number(church.longitude);
           if (!validPoint(lat, lng)) return;
           bounds.push([lat, lng]);
-          const porte = church.porte || "";
+          const porte = (church.porte || "LOCAL").toUpperCase().trim();
           const marker = L.marker([lat, lng], {
-            icon: L.divIcon({ html: `<span style="display:block;background:${porteColor(porte)};width:20px;height:20px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px #0009"></span>`, className: "church-marker-icon", iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12] }),
+            icon: customPin(porteColor(porte)),
             porte
           });
           const title = document.createElement("strong");
@@ -74,7 +78,9 @@
           marker.bindPopup(content);
           group.addLayer(marker);
         });
-        if (bounds.length === 1) {
+        if (resetView) {
+          map.flyTo([-14.235, -51.9253], 4);
+        } else if (bounds.length === 1) {
           map.flyTo(bounds[0], 16);
           group.eachLayer((marker) => marker.getLatLng().equals(bounds[0]) && marker.openPopup());
         } else if (bounds.length) {
@@ -89,12 +95,27 @@
     document.querySelector('[data-action~="click->map#toggleFilters"]')?.addEventListener("click", () => document.querySelector('[data-map-target="filterModal"]')?.classList.toggle("hidden"));
     document.querySelector('[data-action~="click->map#clearFilters"]')?.addEventListener("click", () => {
       document.querySelectorAll('[data-map-target="porteFilter"], [data-map-target="validadaFilter"], [data-map-target="searchInput"]').forEach((input) => { input.value = ""; });
-      loadMarkers();
+      document.querySelector('[data-map-target="clearSearch"]')?.classList.add("hidden");
+      loadMarkers(true);
+    });
+    const searchInput = document.querySelector('[data-map-target="searchInput"]');
+    const clearSearch = document.querySelector('[data-map-target="clearSearch"]');
+    clearSearch?.addEventListener("click", () => {
+      if (searchInput) searchInput.value = "";
+      clearSearch.classList.add("hidden");
+      clearTimeout(searchTimeout);
+      loadMarkers(true);
     });
     let searchTimeout;
-    document.querySelector('[data-map-target="searchInput"]')?.addEventListener("input", () => {
+    searchInput?.addEventListener("input", () => {
+      const query = searchInput.value.trim();
+      clearSearch?.classList.toggle("hidden", query.length === 0);
       clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(loadMarkers, 400);
+      if (!query) {
+        loadMarkers(true);
+      } else {
+        searchTimeout = setTimeout(() => loadMarkers(), 400);
+      }
     });
     window.addEventListener("resize", () => map.invalidateSize());
     setTimeout(() => map.invalidateSize(), 250);

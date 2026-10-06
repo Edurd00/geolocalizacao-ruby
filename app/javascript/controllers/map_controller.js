@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = [ "mapContainer", "filterModal", "porteFilter", "validadaFilter", "searchInput" ]
+  static targets = [ "mapContainer", "filterModal", "porteFilter", "validadaFilter", "searchInput", "clearSearch" ]
 
   connect() {
     this.markerRequestId = 0
@@ -58,13 +58,30 @@ export default class extends Controller {
     }, 250)
   }
 
-  porteColor(porte) {
-    const normalizedPorte = (porte || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
-    const colors = { ESTADUAL: "#3b82f6", SETORIAL: "#f59e0b", CENTRAL: "#f97316", REGIONAL: "#10b981", LOCAL: "#a855f7", "CASA DE ORACAO": "#ec4899", "ALDEIA INDIGENA": "#22d3ee" }
-    return colors[normalizedPorte] || "#6b7280"
+  get PorteColors() {
+    return {
+      ESTADUAL: "#3b82f6",
+      SETORIAL: "#eab308",
+      CENTRAL: "#f97316",
+      REGIONAL: "#22c55e",
+      LOCAL: "#64748b",
+      "CASA DE ORAÇÃO": "#ec4899",
+      "ALDEIA INDÍGENA": "#06b6d4"
+    }
   }
 
-  async loadMarkers(params = "") {
+  porteColor(porte) {
+    const normalized = (porte || "LOCAL").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
+    const entry = Object.entries(this.PorteColors).find(([name]) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() === normalized)
+    return entry?.[1] || "#64748b"
+  }
+
+  createCustomPin(color) {
+    const svgHtml = `<div style="width:32px;height:40px;filter:drop-shadow(0 2px 3px #0008)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="32" height="40" fill="${color}"><path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" stroke="#ffffff" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="#ffffff"/><circle cx="12" cy="12" r="3" fill="${color}"/></svg></div>`
+    return L.divIcon({ html: svgHtml, className: "custom-pin-icon", iconSize: [32, 40], iconAnchor: [16, 40], popupAnchor: [0, -36] })
+  }
+
+  async loadMarkers(params = "", { resetView = false } = {}) {
     const requestId = ++this.markerRequestId
     try {
       const response = await fetch(`/map/locations${params}`, { headers: { Accept: "application/json" } })
@@ -80,20 +97,16 @@ export default class extends Controller {
       const bounds = L.latLngBounds()
       const markers = []
 
-      const createIcon = (porte) => {
-        const color = this.porteColor(porte)
-        const html = `<span style="display:block;background-color:${color};width:20px;height:20px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px #0009"></span>`
-        return L.divIcon({ html, className: "church-marker-icon", iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12] })
-      }
-
       locations.forEach(loc => {
         const lat = parseFloat(loc.latitude)
         const lng = parseFloat(loc.longitude)
         if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
           bounds.extend([lat, lng])
-          const icon = createIcon(loc.porte)
+          const porte = (loc.porte || "LOCAL").toUpperCase().trim()
+          const color = this.porteColor(porte)
+          const icon = this.createCustomPin(color)
           const marker = L.marker([lat, lng], { icon })
-          marker.options.porte = loc.porte
+          marker.options.porte = porte
 
           const nome = loc.nome || loc.desc_igreja || loc.name || 'Igreja IPDA'
           const totvs = loc.codigo_totvs || loc.totvs_code || '-'
@@ -125,7 +138,9 @@ export default class extends Controller {
         }
       })
 
-      if (bounds.isValid()) {
+      if (resetView) {
+        this.map.flyTo([-14.2350, -51.9253], 4)
+      } else if (bounds.isValid()) {
         if (markers.length === 1) {
           const center = bounds.getCenter()
           this.map.flyTo([center.lat, center.lng], 16)
@@ -164,11 +179,25 @@ export default class extends Controller {
     if (this.hasPorteFilterTarget) this.porteFilterTarget.value = ""
     if (this.hasValidadaFilterTarget) this.validadaFilterTarget.value = ""
     if (this.hasSearchInputTarget) this.searchInputTarget.value = ""
-    this.loadMarkers()
+    if (this.hasClearSearchTarget) this.clearSearchTarget.classList.add("hidden")
+    this.loadMarkers("", { resetView: true })
+  }
+
+  clearSearch() {
+    if (this.hasSearchInputTarget) this.searchInputTarget.value = ""
+    if (this.hasClearSearchTarget) this.clearSearchTarget.classList.add("hidden")
+    clearTimeout(this.searchTimeout)
+    this.loadMarkers("", { resetView: true })
   }
 
   search() {
+    const query = this.hasSearchInputTarget ? this.searchInputTarget.value.trim() : ""
+    if (this.hasClearSearchTarget) this.clearSearchTarget.classList.toggle("hidden", query.length === 0)
     clearTimeout(this.searchTimeout)
-    this.searchTimeout = setTimeout(() => this.applyFilters(), 400)
+    if (!query) {
+      this.loadMarkers("", { resetView: true })
+    } else {
+      this.searchTimeout = setTimeout(() => this.applyFilters(), 400)
+    }
   }
 }
