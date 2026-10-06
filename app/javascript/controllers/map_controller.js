@@ -36,6 +36,10 @@ export default class extends Controller {
 
     L.control.layers({ "Satélite Esri": esriSat, "Mapa (OSM)": osmLayer }).addTo(this.map)
     this.markerCluster = L.markerClusterGroup({
+      chunkedLoading: false,
+      animate: false,
+      animateAddingMarkers: false,
+      removeOutsideVisibleBounds: true,
       iconCreateFunction: (cluster) => {
         const counts = new Map()
         cluster.getAllChildMarkers().forEach((marker) => {
@@ -77,8 +81,12 @@ export default class extends Controller {
   }
 
   createCustomPin(color) {
+    this.pinIconCache ||= new Map()
+    if (this.pinIconCache.has(color)) return this.pinIconCache.get(color)
     const svgHtml = `<div style="width:32px;height:40px;filter:drop-shadow(0 2px 3px #0008)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="32" height="40" fill="${color}"><path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" stroke="#ffffff" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="#ffffff"/><circle cx="12" cy="12" r="3" fill="${color}"/></svg></div>`
-    return L.divIcon({ html: svgHtml, className: "custom-pin-icon", iconSize: [32, 40], iconAnchor: [16, 40], popupAnchor: [0, -36] })
+    const icon = L.divIcon({ html: svgHtml, className: "custom-pin-icon", iconSize: [32, 40], iconAnchor: [16, 40], popupAnchor: [0, -36] })
+    this.pinIconCache.set(color, icon)
+    return icon
   }
 
   async loadMarkers(params = "", { resetView = false } = {}) {
@@ -96,61 +104,60 @@ export default class extends Controller {
 
       const bounds = L.latLngBounds()
       const markers = []
+      let index = 0
+      const processBatch = () => {
+        if (requestId !== this.markerRequestId || !this.map) return
+        const batch = []
+        const batchEnd = Math.min(index + 400, locations.length)
+        for (; index < batchEnd; index += 1) {
+          const loc = locations[index]
+          const lat = parseFloat(loc.latitude)
+          const lng = parseFloat(loc.longitude)
+          if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) continue
 
-      locations.forEach(loc => {
-        const lat = parseFloat(loc.latitude)
-        const lng = parseFloat(loc.longitude)
-        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
           bounds.extend([lat, lng])
           const porte = (loc.porte || "LOCAL").toUpperCase().trim()
-          const color = this.porteColor(porte)
-          const icon = this.createCustomPin(color)
-          const marker = L.marker([lat, lng], { icon })
+          const marker = L.marker([lat, lng], { icon: this.createCustomPin(this.porteColor(porte)) })
           marker.options.porte = porte
-
-          const nome = loc.nome || loc.desc_igreja || loc.name || 'Igreja IPDA'
-          const totvs = loc.codigo_totvs || loc.totvs_code || '-'
-          const porte = loc.porte || '---'
-          const municipio = loc.municipio || ''
-          const estado = loc.estado || ''
-          const endereco = loc.endereco || ''
-
-          const popupContent = document.createElement("div")
-          const addPopupLine = (label, value, strong = false) => {
-            const line = document.createElement("div")
-            if (strong) {
-              const title = document.createElement("strong")
-              title.textContent = `${label}: ${value}`
-              line.appendChild(title)
-            } else {
-              line.textContent = `${label}: ${value}`
+          marker.bindPopup(() => {
+            const content = document.createElement("div")
+            const addPopupLine = (label, value, strong = false) => {
+              const line = document.createElement("div")
+              line.textContent = `${label}: ${value || "—"}`
+              if (strong) {
+                const title = document.createElement("strong")
+                title.textContent = line.textContent
+                line.replaceChildren(title)
+              }
+              content.appendChild(line)
             }
-            popupContent.appendChild(line)
-          }
-          addPopupLine("Código TOTVS", totvs, true)
-          addPopupLine("Nome da Igreja", nome)
-          addPopupLine("Porte", porte)
-          addPopupLine("Município/UF", [municipio, estado].filter(Boolean).join("/"))
-          addPopupLine("Endereço", endereco)
-          marker.bindPopup(popupContent)
-          this.markerCluster.addLayer(marker)
+            addPopupLine("Código TOTVS", loc.codigo_totvs || loc.totvs_code, true)
+            addPopupLine("Nome da Igreja", loc.nome || loc.desc_igreja || loc.name || "Igreja IPDA")
+            addPopupLine("Porte", loc.porte || "---")
+            addPopupLine("Município/UF", [loc.municipio, loc.estado].filter(Boolean).join("/"))
+            addPopupLine("Endereço", loc.endereco)
+            return content
+          })
+          batch.push(marker)
           markers.push(marker)
         }
-      })
+        this.markerCluster.addLayers(batch)
 
-      if (resetView) {
-        this.map.flyTo([-14.2350, -51.9253], 4)
-      } else if (bounds.isValid()) {
-        if (markers.length === 1) {
-          const center = bounds.getCenter()
-          this.map.flyTo([center.lat, center.lng], 16)
-          setTimeout(() => {
-            markers[0].openPopup()
-          }, 500)
-        } else {
-          this.map.fitBounds(bounds, { padding: [50, 50] })
+        if (index < locations.length) {
+          window.setTimeout(processBatch, 0)
+        } else if (resetView) {
+          this.map.flyTo([-14.2350, -51.9253], 4)
+        } else if (bounds.isValid()) {
+          if (markers.length === 1) {
+            const center = bounds.getCenter()
+            this.map.flyTo([center.lat, center.lng], 16)
+            window.setTimeout(() => markers[0].openPopup(), 500)
+          } else {
+            this.map.fitBounds(bounds, { padding: [50, 50] })
+          }
         }
       }
+      processBatch()
     } catch (e) {
       console.error("Erro ao carregar locais:", e)
     }
@@ -197,7 +204,7 @@ export default class extends Controller {
     if (!query) {
       this.loadMarkers("", { resetView: true })
     } else {
-      this.searchTimeout = setTimeout(() => this.applyFilters(), 400)
+      this.searchTimeout = setTimeout(() => this.applyFilters(), 250)
     }
   }
 }

@@ -20,8 +20,11 @@
     L.control.layers({ "Satélite Esri": satellite, OpenStreetMap: osm }).addTo(map);
 
     const group = L.markerClusterGroup ? L.markerClusterGroup({
-      chunkedLoading: true,
+      chunkedLoading: false,
       showCoverageOnHover: false,
+      animate: false,
+      animateAddingMarkers: false,
+      removeOutsideVisibleBounds: true,
       iconCreateFunction: (cluster) => {
         const counts = new Map();
         cluster.getAllChildMarkers().forEach((marker) => counts.set(marker.options.porte, (counts.get(marker.options.porte) || 0) + 1));
@@ -50,42 +53,56 @@
         if (requestId !== markerRequestId) return;
         group.clearLayers();
         const bounds = [];
-        churches.forEach((church) => {
-          const lat = Number(church.latitude), lng = Number(church.longitude);
-          if (!validPoint(lat, lng)) return;
-          bounds.push([lat, lng]);
-          const porte = (church.porte || "LOCAL").toUpperCase().trim();
-          const marker = L.marker([lat, lng], {
-            icon: customPin(porteColor(porte)),
-            porte
-          });
-          const title = document.createElement("strong");
-          title.textContent = church.nome || "Igreja IPDA";
-          const content = document.createElement("div");
-          const addLine = (label, value) => {
-            const line = document.createElement("div");
-            line.textContent = `${label}: ${value || "—"}`;
-            content.appendChild(line);
-          };
-          const codeLine = document.createElement("div");
-          title.textContent = `Código TOTVS: ${church.codigo_totvs || "—"}`;
-          codeLine.appendChild(title);
-          content.append(codeLine);
-          addLine("Nome da Igreja", church.nome || "Igreja IPDA");
-          addLine("Porte", porte || "—");
-          addLine("Município/UF", [church.municipio, church.estado].filter(Boolean).join("/") || "—");
-          addLine("Endereço", [church.endereco, church.bairro].filter(Boolean).join(", ") || "—");
-          marker.bindPopup(content);
-          group.addLayer(marker);
-        });
-        if (resetView) {
-          map.flyTo([-14.235, -51.9253], 4);
-        } else if (bounds.length === 1) {
-          map.flyTo(bounds[0], 16);
-          group.eachLayer((marker) => marker.getLatLng().equals(bounds[0]) && marker.openPopup());
-        } else if (bounds.length) {
-          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
-        }
+        const iconCache = new Map();
+        let index = 0;
+        const processBatch = () => {
+          if (requestId !== markerRequestId) return;
+          const markers = [];
+          const batchEnd = Math.min(index + 400, churches.length);
+          for (; index < batchEnd; index += 1) {
+            const church = churches[index];
+            const lat = Number(church.latitude), lng = Number(church.longitude);
+            if (!validPoint(lat, lng)) continue;
+            bounds.push([lat, lng]);
+            const porte = (church.porte || "LOCAL").toUpperCase().trim();
+            const color = porteColor(porte);
+            if (!iconCache.has(color)) iconCache.set(color, customPin(color));
+            const marker = L.marker([lat, lng], { icon: iconCache.get(color), porte });
+            marker.bindPopup(() => {
+              const content = document.createElement("div");
+              const addLine = (label, value, strong = false) => {
+                const line = document.createElement("div");
+                line.textContent = `${label}: ${value || "—"}`;
+                if (strong) {
+                  const title = document.createElement("strong");
+                  title.textContent = line.textContent;
+                  line.replaceChildren(title);
+                }
+                content.appendChild(line);
+              };
+              addLine("Código TOTVS", church.codigo_totvs, true);
+              addLine("Nome da Igreja", church.nome || "Igreja IPDA");
+              addLine("Porte", porte);
+              addLine("Município/UF", [church.municipio, church.estado].filter(Boolean).join("/"));
+              addLine("Endereço", [church.endereco, church.bairro].filter(Boolean).join(", "));
+              return content;
+            });
+            markers.push(marker);
+          }
+          if (typeof group.addLayers === "function") group.addLayers(markers);
+          else markers.forEach((marker) => group.addLayer(marker));
+          if (index < churches.length) {
+            window.setTimeout(processBatch, 0);
+          } else if (resetView) {
+            map.flyTo([-14.235, -51.9253], 4);
+          } else if (bounds.length === 1) {
+            map.flyTo(bounds[0], 16);
+            group.eachLayer((marker) => marker.getLatLng().equals(bounds[0]) && marker.openPopup());
+          } else if (bounds.length) {
+            map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+          }
+        };
+        processBatch();
       } catch (error) {
         console.error(error);
       }
@@ -114,7 +131,7 @@
       if (!query) {
         loadMarkers(true);
       } else {
-        searchTimeout = setTimeout(() => loadMarkers(), 400);
+        searchTimeout = setTimeout(() => loadMarkers(), 250);
       }
     });
     window.addEventListener("resize", () => map.invalidateSize());
