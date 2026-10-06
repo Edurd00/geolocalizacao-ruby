@@ -41,9 +41,11 @@
       const requestId = ++markerRequestId;
       const params = new URLSearchParams();
       const porte = document.querySelector('[data-map-target="porteFilter"]')?.value;
+      const estado = document.querySelector('[data-map-target="estadoFilter"]')?.value;
       const validada = document.querySelector('[data-map-target="validadaFilter"]')?.value;
       const query = document.querySelector('[data-map-target="searchInput"]')?.value.trim();
       if (porte) params.set("porte", porte);
+      if (estado) params.set("estado", estado);
       if (validada) params.set("validada", validada);
       if (query?.length >= 2) params.set("query", query);
       try {
@@ -108,11 +110,28 @@
       }
     }
 
-    document.querySelectorAll('[data-action~="change->map#applyFilters"]').forEach((input) => input.addEventListener("change", loadMarkers));
-    document.querySelector('[data-action~="click->map#toggleFilters"]')?.addEventListener("click", () => document.querySelector('[data-map-target="filterModal"]')?.classList.toggle("hidden"));
+    document.querySelectorAll('[data-action~="change->map#applyFilters"]').forEach((input) => input.addEventListener("change", () => {
+      clearTimeout(searchTimeout);
+      loadMarkers();
+    }));
+    const filterToggle = document.querySelector('[data-map-target="filterToggle"]');
+    const filterModal = document.querySelector('[data-map-target="filterModal"]');
+    const setFiltersOpen = (open) => {
+      filterModal?.classList.toggle("hidden", !open);
+      filterToggle?.setAttribute("aria-expanded", String(open));
+    };
+    filterToggle?.addEventListener("click", () => setFiltersOpen(filterModal?.classList.contains("hidden")));
+    document.addEventListener("click", (event) => {
+      if (!filterModal?.classList.contains("hidden") && !filterModal.contains(event.target) && !filterToggle?.contains(event.target)) setFiltersOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") setFiltersOpen(false);
+    });
     document.querySelector('[data-action~="click->map#clearFilters"]')?.addEventListener("click", () => {
-      document.querySelectorAll('[data-map-target="porteFilter"], [data-map-target="validadaFilter"], [data-map-target="searchInput"]').forEach((input) => { input.value = ""; });
+      clearTimeout(searchTimeout);
+      document.querySelectorAll('[data-map-target="porteFilter"], [data-map-target="estadoFilter"], [data-map-target="validadaFilter"], [data-map-target="searchInput"]').forEach((input) => { input.value = ""; });
       document.querySelector('[data-map-target="clearSearch"]')?.classList.add("hidden");
+      setFiltersOpen(false);
       loadMarkers(true);
     });
     const searchInput = document.querySelector('[data-map-target="searchInput"]');
@@ -157,7 +176,7 @@
     link?.addEventListener("change", async () => {
       if (!link.value.trim()) return;
       try {
-        const response = await fetch("/validation/extract_coords", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || "" }, body: JSON.stringify({ url: link.value }) });
+        const response = await fetch("/validacao/extract_coords", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || "" }, body: JSON.stringify({ url: link.value }) });
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || "Não foi possível encontrar coordenadas nesse link.");
         const point = [Number(result.latitude), Number(result.longitude)];

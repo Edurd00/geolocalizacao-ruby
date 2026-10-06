@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = [ "mapContainer", "filterModal", "porteFilter", "validadaFilter", "searchInput", "clearSearch" ]
+  static targets = [ "mapContainer", "filterModal", "filterToggle", "porteFilter", "estadoFilter", "validadaFilter", "searchInput", "clearSearch" ]
 
   connect() {
     this.markerRequestId = 0
@@ -165,16 +165,20 @@ export default class extends Controller {
 
   toggleFilters() {
     if (this.hasFilterModalTarget) {
-      this.filterModalTarget.classList.toggle("hidden")
+      const open = this.filterModalTarget.classList.contains("hidden")
+      this.filterModalTarget.classList.toggle("hidden", !open)
+      if (this.hasFilterToggleTarget) this.filterToggleTarget.setAttribute("aria-expanded", String(open))
     }
   }
 
   applyFilters() {
     const porte = this.hasPorteFilterTarget ? this.porteFilterTarget.value : ""
+    const estado = this.hasEstadoFilterTarget ? this.estadoFilterTarget.value : ""
     const validada = this.hasValidadaFilterTarget ? this.validadaFilterTarget.value : ""
     const query = this.hasSearchInputTarget ? this.searchInputTarget.value.trim() : ""
     const paramsObj = {}
     if (porte) paramsObj.porte = porte
+    if (estado) paramsObj.estado = estado
     if (validada) paramsObj.validada = validada
     if (query.length >= 2) paramsObj.query = query
 
@@ -184,9 +188,12 @@ export default class extends Controller {
 
   clearFilters() {
     if (this.hasPorteFilterTarget) this.porteFilterTarget.value = ""
+    if (this.hasEstadoFilterTarget) this.estadoFilterTarget.value = ""
     if (this.hasValidadaFilterTarget) this.validadaFilterTarget.value = ""
     if (this.hasSearchInputTarget) this.searchInputTarget.value = ""
     if (this.hasClearSearchTarget) this.clearSearchTarget.classList.add("hidden")
+    if (this.hasFilterModalTarget) this.filterModalTarget.classList.add("hidden")
+    if (this.hasFilterToggleTarget) this.filterToggleTarget.setAttribute("aria-expanded", "false")
     this.loadMarkers("", { resetView: true })
   }
 
