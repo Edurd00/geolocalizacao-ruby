@@ -1,15 +1,8 @@
-<header class="absolute top-4 left-1/2 -translate-x-1/2 z-[2000] w-[95%] max-w-7xl bg-slate-900/80 backdrop-blur-md rounded-full px-6 py-2.5 border border-slate-800/80 shadow-2xl flex items-center justify-between">
-  <!-- Esquerda: Logo oficial + Título curto + Badge / Counter -->
-  <div class="flex items-center gap-3 shrink-0">
-    <img src="/img/logo.png" alt="GEO-VALIG IPDA" class="h-8 w-auto object-contain shrink-0" />
-    <div class="flex items-center gap-2 whitespace-nowrap">
-      <h1 class="text-sm md:text-base font-extrabold text-white tracking-tight whitespace-nowrap">
-        GEO-VALIG IPDA
-      </h1>
-      <span class="px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 text-indigo-400 border border-slate-700/80 uppercase tracking-wider shrink-0 whitespace-nowrap">
-        <%= defined?(@total_churches_count) && @total_churches_count.present? ? "#{@total_churches_count} no mapa" : "0 no mapa" %>
-      </span>
-    </div>
+<header class="fixed top-4 left-1/2 -translate-x-1/2 z-[2000] w-[92%] max-w-7xl bg-slate-900/85 backdrop-blur-md rounded-full px-5 py-2.5 border border-slate-800/80 shadow-2xl flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <img src="/img/logo.png" alt="Logo IPDA" class="h-7 w-auto flex-shrink-0" />
+    <span class="font-black text-sm tracking-wide text-white">GEO-VALIG IPDA</span>
+    <span class="bg-indigo-500/20 text-indigo-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-indigo-500/30">12228 IGREJAS</span>
   </div>
 
   <!-- Centro: Busca compacta por TOTVS, nome, rua ou município -->

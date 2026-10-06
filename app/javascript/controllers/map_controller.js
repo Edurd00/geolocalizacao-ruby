@@ -3,6 +3,12 @@ import { Controller } from "@hotwired/stimulus"
 export default class extends Controller {
   connect() {
     this.initMap()
+    window.addEventListener('resize', () => this.map && this.map.invalidateSize())
+    setTimeout(() => {
+      if (this.map) {
+        this.map.invalidateSize()
+      }
+    }, 300)
   }
 
   disconnect() {
