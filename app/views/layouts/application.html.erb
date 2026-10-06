@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="dark bg-slate-950 text-white font-sans h-full w-full overflow-hidden">
+<html class="h-full w-full m-0 p-0 overflow-hidden bg-slate-950">
   <head>
     <title>GEO-VALIG IPDA - Sistema de Gestão e Inteligência Patrimonial</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -22,11 +22,8 @@
     <script src="/application.js" defer></script>
   </head>
 
-  <body class="h-screen w-screen bg-slate-950 text-slate-100 font-sans antialiased overflow-hidden m-0 p-0 relative">
+  <body class="h-full w-full m-0 p-0 overflow-hidden text-white relative">
     <%= render "shared/navbar" %>
-
-    <main class="h-screen w-screen p-0 m-0 relative">
-      <%= yield %>
-    </main>
+    <%= yield %>
   </body>
 </html>

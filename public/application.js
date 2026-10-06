@@ -6,6 +6,11 @@
     const element = byId("map");
     if (!element || !window.L) return;
     const map = L.map(element, { center: [-14.235, -51.925], zoom: 4 });
+
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+
     const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' });
     const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Tiles &copy; Esri" });
     satellite.addTo(map);

@@ -19,6 +19,12 @@ export default class extends Controller {
       zoomControl: true
     })
 
+    setTimeout(() => {
+      if (this.map) {
+        this.map.invalidateSize()
+      }
+    }, 200)
+
     // 1. Esri World Imagery Satellite Tile Layer
     const esriSatellite = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
