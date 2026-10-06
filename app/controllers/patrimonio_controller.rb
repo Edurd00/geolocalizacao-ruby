@@ -27,23 +27,38 @@ class PatrimonioController < ApplicationController
 
   def index
     @query = params[:query].presence || params[:search].presence
-    @total_churches_count = Church.count rescue 0
+    @total_churches_count = 0
+    @patrimonio_tables_ready = false
+    @churches = []
 
+    return unless Church.table_exists?
+
+    @total_churches_count = Church.count
+    @patrimonio_tables_ready = Asset.table_exists? && AssetItem.table_exists?
     scope = Church.all
 
     if @query.present?
-      q = "%#{@query.strip.downcase}%"
-      if Church.column_names.include?('desc_igreja')
-        scope = scope.where("LOWER(desc_igreja) LIKE :q OR LOWER(codigo_totvs) LIKE :q OR LOWER(municipio) LIKE :q", q: q)
-      elsif Church.column_names.include?('nome')
-        scope = scope.where("LOWER(nome) LIKE :q OR LOWER(codigo_totvs) LIKE :q OR LOWER(municipio) LIKE :q", q: q)
+      q = "%#{Church.sanitize_sql_like(@query.strip.downcase)}%"
+      searchable_columns = %w[nome desc_igreja codigo_totvs municipio].select { |column| Church.column_names.include?(column) }
+      if searchable_columns.any?
+        conditions = searchable_columns.map { |column| "LOWER(#{Church.connection.quote_column_name(column)}) LIKE :q" }
+        scope = scope.where(conditions.join(" OR "), q: q)
       end
     end
 
-    @churches = scope.order(:nome).limit(50) rescue []
+    @churches = scope.order(:nome).limit(50).to_a
+  rescue StandardError => e
+    Rails.logger.error("Erro ao carregar módulo de patrimônio: #{e.class}: #{e.message}")
+    @patrimonio_tables_ready = false
+    @churches = []
   end
 
   def show
+    unless patrimonio_tables_ready?
+      redirect_to patrimonio_index_path, alert: 'As tabelas de patrimônio ainda não estão disponíveis. Execute as migrations do banco.'
+      return
+    end
+
     @total_churches_count = Church.count rescue 0
     @asset = Asset.find_or_initialize_by(codigo_totvs: @church.codigo_totvs, ano_referencia: Time.current.year)
 
@@ -55,6 +70,11 @@ class PatrimonioController < ApplicationController
   end
 
   def update
+    unless patrimonio_tables_ready?
+      redirect_to patrimonio_index_path, alert: 'As tabelas de patrimônio ainda não estão disponíveis. Execute as migrations do banco.'
+      return
+    end
+
     @asset = Asset.find_or_initialize_by(codigo_totvs: @church.codigo_totvs, ano_referencia: Time.current.year)
     @asset.assign_attributes(asset_params)
     @asset.data_envio = Time.current
@@ -92,11 +112,20 @@ class PatrimonioController < ApplicationController
 
   private
 
+  def patrimonio_tables_ready?
+    Church.table_exists? && Asset.table_exists? && AssetItem.table_exists?
+  rescue StandardError
+    false
+  end
+
   def set_church
     @church = Church.find_by(codigo_totvs: params[:id]) || Church.find_by(id: params[:id])
     unless @church
       redirect_to patrimonio_index_path, alert: 'Igreja não encontrada.'
     end
+  rescue StandardError => e
+    Rails.logger.error("Erro ao localizar igreja para patrimônio: #{e.class}: #{e.message}")
+    redirect_to patrimonio_index_path, alert: 'A tabela de igrejas ainda não está disponível.'
   end
 
   def asset_params

@@ -1,5 +1,6 @@
 class OrganizacaoController < ApplicationController
   def index
+    @churches_table_ready = Church.table_exists? rescue false
     @total_churches_count = Church.count rescue 0
     @selected_region = params[:region].presence || 'Sudeste - SP'
     @selected_state = params[:state].presence || 'ALL'
@@ -27,7 +28,7 @@ class OrganizacaoController < ApplicationController
       end
     end
 
-    @churches = churches_scope.order(:nome) rescue []
+    @churches = churches_scope.order(:nome).to_a rescue []
 
     # Regional counters by hierarchical level (porte)
     @regional_counts = Church.regional_counts(@selected_region) rescue {}
@@ -35,6 +36,7 @@ class OrganizacaoController < ApplicationController
   rescue StandardError => e
     Rails.logger.error("Error in OrganizacaoController#index: #{e.message}")
     @total_churches_count = 0
+    @churches_table_ready = false
     @regions = Church::REGIAO_GEOGRAFICA_MAPPING.keys
     @states = []
     @churches = []

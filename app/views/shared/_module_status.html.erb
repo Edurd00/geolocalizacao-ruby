@@ -1,0 +1,5 @@
+<% migrating = local_assigns.fetch(:migrating, false) %>
+<div role="status" class="rounded-xl border px-4 py-3 <%= migrating ? 'border-amber-800/70 bg-amber-950/40 text-amber-200' : 'border-emerald-800/70 bg-emerald-950/30 text-emerald-200' %>">
+  <p class="text-xs font-bold"><%= migrating ? 'Migração em andamento' : 'Estrutura de dados disponível' %></p>
+  <p class="mt-1 text-xs leading-relaxed opacity-90"><%= message %></p>
+</div>

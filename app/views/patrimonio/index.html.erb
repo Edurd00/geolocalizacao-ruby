@@ -1,4 +1,6 @@
 <div class="space-y-6 max-w-5xl mx-auto">
+  <%= render "shared/module_status", migrating: !@patrimonio_tables_ready, message: "As migrations declaram as tabelas patrimonio_submissoes e patrimonio_itens para inventários e seus itens." %>
+
   <!-- Search & Filter Header Card -->
   <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
@@ -68,7 +70,7 @@
     <% else %>
       <div class="grid grid-cols-1 gap-3">
         <% @churches.each do |church| %>
-          <% latest = church.respond_to?(:latest_asset) ? church.latest_asset : nil %>
+          <% latest = @patrimonio_tables_ready ? church.latest_asset : nil %>
           <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-slate-700 transition-colors gap-4">
             <div class="flex items-start gap-3 min-w-0 flex-1">
               <div class="w-10 h-10 rounded-xl bg-indigo-950/80 border border-indigo-800/60 text-indigo-400 flex items-center justify-center shrink-0 font-extrabold text-sm">

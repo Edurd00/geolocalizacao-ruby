@@ -1,5 +1,6 @@
+<% fullscreen_map = controller_name == "map" && action_name == "index" %>
 <!DOCTYPE html>
-<html class="h-full w-full m-0 p-0 overflow-hidden bg-slate-950">
+<html class="<%= fullscreen_map ? 'h-full w-full m-0 p-0 overflow-hidden bg-slate-950' : 'min-h-full w-full m-0 p-0 overflow-x-hidden overflow-y-auto bg-slate-950' %>">
   <head>
     <title>GEO-VALIG IPDA</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -14,10 +15,15 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <style>
-      html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }
+      html, body { width: 100%; margin: 0; padding: 0; background: #020617; }
+      <% if fullscreen_map %>
+        html, body, #map { height: 100%; overflow: hidden; }
+      <% else %>
+        html, body { min-height: 100%; height: auto; overflow-x: hidden; overflow-y: auto; }
+      <% end %>
     </style>
   </head>
-  <body class="h-screen w-screen m-0 p-0 overflow-hidden bg-slate-950 text-white relative">
+  <body class="<%= fullscreen_map ? 'h-screen w-screen m-0 p-0 overflow-hidden bg-slate-950 text-white relative' : 'min-h-screen w-full m-0 p-0 overflow-x-hidden overflow-y-auto bg-slate-950 text-white relative' %>">
     <%= yield %>
   </body>
 </html>

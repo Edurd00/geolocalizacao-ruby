@@ -2,7 +2,9 @@ class ValidationController < ApplicationController
   before_action :set_church, only: [:update]
 
   def show
-    @church = find_next_pending_church
+    @church_table_ready = Church.table_exists? rescue false
+    @total_churches_count = Church.count rescue 0
+    @church = find_next_pending_church if @church_table_ready
   end
 
   def update
@@ -28,7 +30,7 @@ class ValidationController < ApplicationController
     end
 
     if @church.save
-      redirect_to validation_path, notice: "Coordenadas salvas e igreja validada."
+      redirect_to validacao_path, notice: "Coordenadas salvas e igreja validada."
     else
       render :show, status: :unprocessable_entity
     end

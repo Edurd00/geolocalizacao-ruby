@@ -1,4 +1,6 @@
 <div class="space-y-6 max-w-6xl mx-auto">
+  <%= render "shared/module_status", migrating: true, message: (@churches_table_ready ? "Esta tela consulta os cadastros de igrejas e infere a hierarquia pelo porte. Uma tabela própria para relações entre coligações ainda não foi criada." : "A tabela igrejas ainda não está disponível. A consulta de coligações depende dos cadastros de igrejas e aguarda a migration create_igrejas.") %>
+
   <!-- Search & Filter Controls -->
   <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">

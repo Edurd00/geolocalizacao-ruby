@@ -1,4 +1,6 @@
 <div class="space-y-6">
+  <%= render "shared/module_status", migrating: !@churches_table_ready, message: "A organização consulta os cadastros da tabela igrejas; sua estrutura é declarada na migration create_igrejas." %>
+
   <!-- Selector & Controls Panel -->
   <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-5">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">

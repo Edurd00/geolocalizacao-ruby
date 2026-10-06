@@ -1,11 +1,18 @@
 <turbo-frame id="validation_card">
+  <%= render "shared/module_status", migrating: !@church_table_ready, message: "A validação usa os campos de coordenadas e situação declarados na migration da tabela igrejas." %>
+
   <% if flash[:notice].present? %>
     <p role="status"><%= flash[:notice] %></p>
   <% end %>
   <% if @church&.errors&.any? %>
     <div role="alert" aria-live="polite"><%= @church.errors.full_messages.to_sentence %></div>
   <% end %>
-  <% if @church.present? %>
+  <% if !@church_table_ready %>
+    <div class="w-full rounded-3xl border border-amber-800 bg-amber-950/40 p-10 text-center" role="alert">
+      <h2 class="text-lg font-bold text-amber-200">Migração da tabela de igrejas pendente</h2>
+      <p class="mt-2 text-sm text-amber-100/80">A fila de validação estará disponível após a criação da tabela igrejas e dos campos de coordenadas.</p>
+    </div>
+  <% elsif @church.present? %>
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-[600px] items-stretch"
          data-controller="validation"
          data-validation-lat-value="<%= @church.latitude || -14.235 %>"
@@ -62,7 +69,7 @@
         </div>
 
         <!-- Formulário de Atualização e Salvamento -->
-        <%= form_tag update_validation_path(@church), method: :patch, class: "space-y-3 pt-3 border-t border-slate-800", data: { turbo: false } do %>
+        <%= form_tag update_validacao_path(@church), method: :patch, class: "space-y-3 pt-3 border-t border-slate-800", data: { turbo: false } do %>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Latitude</label>
@@ -109,7 +116,7 @@
         <div data-validation-target="map" class="flex-1 w-full h-full rounded-2xl overflow-hidden border border-slate-800 z-10"></div>
       </div>
     </div>
-  <% else %>
+  <% elsif @total_churches_count.positive? %>
     <!-- Card de Validações Concluídas -->
     <div class="w-full bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center shadow-xl">
       <div class="inline-flex p-4 bg-emerald-950/60 border border-emerald-800 rounded-2xl mb-4 text-emerald-400">
@@ -122,6 +129,11 @@
         Não restam registros pendentes na fila. Acesse o Mapa Geral para visualizar as igrejas georreferenciadas.
       </p>
       <a href="/" class="inline-flex items-center px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-lg transition-all">Ir para o Mapa Geral</a>
+    </div>
+  <% else %>
+    <div class="w-full rounded-3xl border border-slate-800 bg-slate-900 p-10 text-center">
+      <h2 class="text-lg font-bold text-white">Nenhuma igreja cadastrada</h2>
+      <p class="mt-2 text-sm text-slate-400">Não há registros disponíveis para validação.</p>
     </div>
   <% end %>
 </turbo-frame>

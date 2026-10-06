@@ -1,10 +1,17 @@
 class ColigacoesController < ApplicationController
   def index
-    @total_churches_count = Church.count rescue 0
     @search_query = params[:query].presence || params[:search].presence
     @selected_state = params[:state].presence || 'ALL'
+    @churches_table_ready = false
+    @total_churches_count = 0
+    @states = []
+    @churches = []
 
-    @states = Church.where.not(estado: [nil, '']).distinct.pluck(:estado).sort rescue []
+    return unless Church.table_exists?
+
+    @churches_table_ready = true
+    @total_churches_count = Church.count
+    @states = Church.where.not(estado: [nil, '']).distinct.pluck(:estado).sort
 
     scope = Church.all
     scope = scope.by_state(@selected_state) if @selected_state != 'ALL'
@@ -18,6 +25,12 @@ class ColigacoesController < ApplicationController
       end
     end
 
-    @churches = scope.order(:nome) rescue []
+    @churches = scope.order(:nome).to_a
+  rescue StandardError => e
+    Rails.logger.error("Erro ao carregar coligações: #{e.class}: #{e.message}")
+    @churches_table_ready = false
+    @total_churches_count = 0
+    @states ||= []
+    @churches = []
   end
 end
