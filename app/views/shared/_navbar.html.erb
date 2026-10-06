@@ -2,23 +2,21 @@
   <div class="flex items-center gap-3">
     <img src="/img/logo.png" alt="Logo IPDA" class="h-7 w-auto flex-shrink-0" />
     <span class="font-black text-sm tracking-wide text-white">GEO-VALIG IPDA</span>
-    <span class="bg-indigo-500/20 text-indigo-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-indigo-500/30">
-      <%= defined?(@total_churches_count) && @total_churches_count.present? ? "#{@total_churches_count} IGREJAS" : (defined?(@churches_count) && @churches_count.present? ? "#{@churches_count} IGREJAS" : "12228 IGREJAS") %>
-    </span>
+    <span class="bg-indigo-500/20 text-indigo-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-indigo-500/30">12228 IGREJAS</span>
   </div>
 
   <!-- Centro: Busca compacta por TOTVS, nome, rua ou município -->
   <div class="hidden md:flex items-center gap-3 flex-1 max-w-md mx-4">
-    <form action="/" method="get" class="relative flex items-center w-full">
+    <div class="relative flex items-center w-full">
       <svg width="16" height="16" class="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
       </svg>
-      <input type="text" name="query" value="<%= defined?(params) && params[:query].present? ? params[:query] : "" %>" placeholder="Buscar por código TOTVS, nome, rua ou município..." class="w-full h-8 bg-slate-800/90 border border-slate-700 text-white placeholder:text-slate-400 font-medium text-xs rounded-full pl-9 pr-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" />
-    </form>
+      <input type="text" data-map-target="searchInput" data-action="input->map#search" placeholder="Buscar por código TOTVS, nome, rua ou município..." class="w-full h-8 bg-slate-800/90 border border-slate-700 text-white placeholder:text-slate-400 font-medium text-xs rounded-full pl-9 pr-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" />
+    </div>
   </div>
 
   <!-- Direita: Opções Públicas (Organização, Filtros, Área Restrita / Login) -->
-  <div class="flex items-center gap-2 shrink-0">
+  <div class="flex items-center gap-2 shrink-0 relative">
     <a href="/organizacao" class="px-3 py-1.5 rounded-full text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 border border-transparent hover:border-slate-700">
       <svg width="16" height="16" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m4 10V11m-4 0h4"/>
@@ -32,6 +30,35 @@
       </svg>
       <span>Filtros</span>
     </button>
+
+    <!-- Dropdown de Filtros Flutuante -->
+    <div data-map-target="filterModal" class="hidden absolute top-12 right-0 w-80 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl z-[3000] text-xs space-y-3">
+      <h4 class="font-bold text-slate-200 uppercase tracking-wider text-[10px]">Filtrar Igrejas</h4>
+      <div>
+        <label class="block text-[10px] text-slate-400 mb-1">Porte</label>
+        <select data-map-target="porteFilter" data-action="change->map#applyFilters" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white">
+          <option value="">Todos os portes</option>
+          <option value="ESTADUAL">ESTADUAL</option>
+          <option value="SETORIAL">SETORIAL</option>
+          <option value="CENTRAL">CENTRAL</option>
+          <option value="REGIONAL">REGIONAL</option>
+          <option value="LOCAL">LOCAL</option>
+          <option value="CASA DE ORAÇÃO">CASA DE ORAÇÃO</option>
+          <option value="ALDEIA INDÍGENA">ALDEIA INDÍGENA</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[10px] text-slate-400 mb-1">Status de Validação</label>
+        <select data-map-target="validadaFilter" data-action="change->map#applyFilters" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white">
+          <option value="">Todas</option>
+          <option value="true">Apenas Validadas</option>
+          <option value="false">Apenas Pendentes</option>
+        </select>
+      </div>
+      <button type="button" data-action="click->map#clearFilters" class="w-full bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-300 font-semibold transition">
+        Limpar Filtros
+      </button>
+    </div>
 
     <a href="/login" class="px-3 py-1.5 rounded-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 border border-indigo-500 shadow-sm">
       <svg width="16" height="16" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
