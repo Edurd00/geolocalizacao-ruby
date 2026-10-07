@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = [ "mapContainer", "filterModal", "filterToggle", "porteFilter", "estadoFilter", "validadaFilter", "searchInput", "clearSearch" ]
+  static targets = [ "mapContainer", "filterModal", "filterToggle", "porteFilter", "estadoFilter", "validadaFilter", "searchInput", "clearSearch", "clearSearchBtn" ]
 
   connect() {
     this.markerRequestId = 0
@@ -615,12 +615,18 @@ export default class extends Controller {
     this.loadMarkers(queryString ? `?${queryString}` : "")
   }
 
+  get clearSearchBtnElement() {
+    if (this.hasClearSearchBtnTarget) return this.clearSearchBtnTarget
+    if (this.hasClearSearchTarget) return this.clearSearchTarget
+    return null
+  }
+
   clearFilters() {
     if (this.hasPorteFilterTarget) this.porteFilterTarget.value = ""
     if (this.hasEstadoFilterTarget) this.estadoFilterTarget.value = ""
     if (this.hasValidadaFilterTarget) this.validadaFilterTarget.value = ""
     if (this.hasSearchInputTarget) this.searchInputTarget.value = ""
-    if (this.hasClearSearchTarget) this.clearSearchTarget.classList.add("hidden")
+    if (this.clearSearchBtnElement) this.clearSearchBtnElement.classList.add("hidden")
     if (this.hasFilterModalTarget) this.filterModalTarget.classList.add("hidden")
     if (this.hasFilterToggleTarget) this.filterToggleTarget.setAttribute("aria-expanded", "false")
     this.loadMarkers("", { resetView: true })
@@ -628,14 +634,17 @@ export default class extends Controller {
 
   clearSearch() {
     if (this.hasSearchInputTarget) this.searchInputTarget.value = ""
-    if (this.hasClearSearchTarget) this.clearSearchTarget.classList.add("hidden")
+    if (this.clearSearchBtnElement) this.clearSearchBtnElement.classList.add("hidden")
     clearTimeout(this.searchTimeout)
-    this.loadMarkers("", { resetView: true })
+    this.applyFilters()
+    if (this.map) {
+      this.map.flyTo([-14.2350, -51.9253], 4)
+    }
   }
 
   search() {
     const query = this.hasSearchInputTarget ? this.searchInputTarget.value.trim() : ""
-    if (this.hasClearSearchTarget) this.clearSearchTarget.classList.toggle("hidden", query.length === 0)
+    if (this.clearSearchBtnElement) this.clearSearchBtnElement.classList.toggle("hidden", query.length === 0)
     clearTimeout(this.searchTimeout)
     if (!query) {
       this.loadMarkers("", { resetView: true })

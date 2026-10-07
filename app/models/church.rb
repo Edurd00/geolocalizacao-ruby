@@ -160,59 +160,44 @@ class Church < ApplicationRecord
 
   # Formats church data for map consumption
   def as_map_json
-    codigo = map_attribute(:codigo_totvs) || map_attribute(:totvs_code)
-    igreja_nome = nome
-
-    parent = parent_church
-    parent_data = if parent
-      parent_code = parent.map_attribute(:codigo_totvs) || parent.map_attribute(:totvs_code)
-      {
-        id: parent.id,
-        name: parent.nome,
-        nome: parent.nome,
-        porte: parent.calculated_porte,
-        totvs_code: parent_code,
-        codigo_totvs: parent_code,
-        latitude: parent.latitude,
-        longitude: parent.longitude
-      }
-    else
-      nil
-    end
-
-    sub_list = subordinate_churches.map do |sub|
-      sub_code = sub.map_attribute(:codigo_totvs) || sub.map_attribute(:totvs_code)
-      {
-        id: sub.id,
-        name: sub.nome,
-        nome: sub.nome,
-        porte: sub.calculated_porte,
-        totvs_code: sub_code,
-        codigo_totvs: sub_code,
-        latitude: sub.latitude,
-        longitude: sub.longitude
-      }
-    end
-
     {
-      id: map_attribute(:id),
-      codigo_totvs: codigo,
-      totvs_code: codigo,
-      nome: igreja_nome,
-      name: igreja_nome,
-      porte: calculated_porte,
-      endereco: map_attribute(:endereco),
-      bairro: map_attribute(:bairro),
-      municipio: map_attribute(:municipio),
-      estado: map_attribute(:estado),
-      cep: map_attribute(:cep),
-      latitude: map_attribute(:latitude),
-      longitude: map_attribute(:longitude),
-      validada: validada,
-      link_google_maps: map_attribute(:link_google_maps),
-      parent_church: parent_data,
+      id: id,
+      totvs_code: codigo_totvs || '',
+      codigo_totvs: codigo_totvs || '',
+      name: nome || 'Igreja Sem Nome',
+      nome: nome || 'Igreja Sem Nome',
+      porte: (porte || 'LOCAL').upcase.strip,
+      latitude: latitude.to_f,
+      longitude: longitude.to_f,
+      validada: validada || false,
+      municipio: municipio || '',
+      estado: estado || '',
+      endereco: endereco || '',
+      bairro: map_attribute(:bairro) || '',
+      cep: map_attribute(:cep) || '',
+      parent_church: parent_church ? {
+        id: parent_church.id,
+        name: parent_church.nome || 'Sede',
+        nome: parent_church.nome || 'Sede',
+        porte: (parent_church.porte || 'SEDE').upcase.strip,
+        totvs_code: parent_church.codigo_totvs || '',
+        codigo_totvs: parent_church.codigo_totvs || '',
+        latitude: parent_church.latitude.to_f,
+        longitude: parent_church.longitude.to_f
+      } : nil,
       subordinates_count: subordinate_churches.size,
-      subordinates: sub_list
+      subordinates: subordinate_churches.map { |sub|
+        {
+          id: sub.id,
+          name: sub.nome || 'Filial',
+          nome: sub.nome || 'Filial',
+          porte: (sub.porte || 'LOCAL').upcase.strip,
+          totvs_code: sub.codigo_totvs || '',
+          codigo_totvs: sub.codigo_totvs || '',
+          latitude: sub.latitude.to_f,
+          longitude: sub.longitude.to_f
+        }
+      }
     }
   end
 
