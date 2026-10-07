@@ -5,27 +5,26 @@ class MapController < ApplicationController
   end
 
   def locations
-    # Seleciona apenas igrejas com coordenadas válidas
     churches = Church.where.not(latitude: nil).where.not(longitude: nil)
+    churches = churches.includes(:parent_church, :subordinate_churches) if Church.column_names.include?('parent_id')
 
     estado = params[:estado].to_s.strip
     porte = params[:porte].to_s.strip
-    churches = churches.where(estado: estado) unless estado.empty?
-    churches = churches.where(porte: porte) unless porte.empty?
+    churches = churches.where(estado: estado) if estado.present?
+    churches = churches.where(porte: porte) if porte.present?
 
     validada = params[:validada].to_s.strip.downcase
     if %w[true false].include?(validada)
-      is_validada = validada == 'true'
       if Church.column_names.include?('validada')
-        churches = churches.where(validada: is_validada)
+        churches = churches.where(validada: validada == 'true')
       elsif Church.column_names.include?('status')
-        status_val = is_validada ? ['VALIDADO', 'VALIDADA'] : ['PENDENTE']
-        churches = churches.where(status: status_val)
+        values = validada == 'true' ? %w[VALIDADO VALIDADA] : ['PENDENTE']
+        churches = churches.where(status: values)
       end
     end
 
     query_text = params[:query].to_s.strip
-    unless query_text.empty?
+    if query_text.present?
       searchable_columns = %w[nome desc_igreja codigo_totvs municipio estado endereco bairro cep porte]
         .select { |column| Church.column_names.include?(column) }
 
@@ -34,13 +33,14 @@ class MapController < ApplicationController
         conditions = searchable_columns.map do |column|
           "#{Church.connection.quote_column_name(column)} ILIKE :query"
         end
-        churches = churches.where(conditions.join(" OR "), query: query)
+        churches = churches.where(conditions.join(' OR '), query: query)
       end
     end
 
     render json: churches.map(&:as_map_json), content_type: 'application/json'
   rescue StandardError => e
-    Rails.logger.error("Erro ao buscar localizacoes: #{e.message}")
-    render json: [], status: :internal_server_error, content_type: 'application/json'
+    Rails.logger.error("Erro no MapController#locations: #{e.message}")
+    Rails.logger.error(e.backtrace.first(10).join("\n"))
+    render json: { error: 'Não foi possível carregar as igrejas do mapa.' }, status: :internal_server_error, content_type: 'application/json'
   end
 end

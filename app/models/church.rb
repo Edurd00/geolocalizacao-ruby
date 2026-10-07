@@ -1,6 +1,12 @@
 class Church < ApplicationRecord
   self.table_name = 'igrejas'
 
+  # Associação para a igreja superior/sede (Coligada a)
+  belongs_to :parent_church, class_name: 'Church', foreign_key: 'parent_id', optional: true
+
+  # Associação para as igrejas subordinadas que respondem a esta sede
+  has_many :subordinate_churches, class_name: 'Church', foreign_key: 'parent_id'
+
   has_many :assets, class_name: 'Asset', foreign_key: :codigo_totvs, primary_key: :codigo_totvs
 
   REGIAO_GEOGRAFICA_MAPPING = {
@@ -154,29 +160,54 @@ class Church < ApplicationRecord
 
   # Formats church data for map consumption
   def as_map_json
-    codigo = map_attribute(:codigo_totvs) || map_attribute(:totvs_code)
-    igreja_nome = nome
+    hierarchy_enabled = has_attribute?(:parent_id)
+    parent = parent_church if hierarchy_enabled && parent_id.present?
+    children = subordinate_churches if hierarchy_enabled
 
     {
-      id: map_attribute(:id),
-      codigo_totvs: codigo,
-      totvs_code: codigo,
-      nome: igreja_nome,
-      name: igreja_nome,
-      porte: calculated_porte,
-      endereco: map_attribute(:endereco),
-      bairro: map_attribute(:bairro),
-      municipio: map_attribute(:municipio),
-      estado: map_attribute(:estado),
-      cep: map_attribute(:cep),
-      latitude: map_attribute(:latitude),
-      longitude: map_attribute(:longitude),
-      validada: validada,
-      link_google_maps: map_attribute(:link_google_maps)
+      id: id,
+      totvs_code: codigo_totvs || '',
+      codigo_totvs: codigo_totvs || '',
+      name: nome || 'Igreja Sem Nome',
+      nome: nome || 'Igreja Sem Nome',
+      porte: (porte || 'LOCAL').upcase.strip,
+      latitude: latitude,
+      longitude: longitude,
+      validada: validada || false,
+      municipio: municipio || '',
+      estado: estado || '',
+      endereco: endereco || '',
+      bairro: map_attribute(:bairro) || '',
+      cep: map_attribute(:cep) || '',
+      parent_church: parent ? {
+        id: parent.id,
+        name: parent.nome || 'Sede',
+        nome: parent.nome || 'Sede',
+        porte: (parent.porte || 'SEDE').upcase.strip,
+        totvs_code: parent.codigo_totvs || '',
+        codigo_totvs: parent.codigo_totvs || '',
+        latitude: parent.latitude,
+        longitude: parent.longitude
+      } : nil,
+      subordinates_count: children ? children.size : 0,
+      subordinates: (children || []).filter_map { |sub|
+        next if sub.latitude.blank? || sub.longitude.blank?
+
+        {
+          id: sub.id,
+          name: sub.nome || 'Filial',
+          nome: sub.nome || 'Filial',
+          porte: (sub.porte || 'LOCAL').upcase.strip,
+          totvs_code: sub.codigo_totvs || '',
+          codigo_totvs: sub.codigo_totvs || '',
+          latitude: sub.latitude,
+          longitude: sub.longitude
+        }
+      }
     }
   end
 
-  private
+  protected
 
   def map_attribute(attribute)
     has_attribute?(attribute) ? self[attribute] : nil
