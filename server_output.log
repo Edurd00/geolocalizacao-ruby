@@ -1,18 +1,64 @@
+=> Booting Puma
+=> Rails 8.0.5.1 application starting in development
+=> Run `bin/rails server --help` for more startup options
+config.eager_load is set to nil. Please update your config/environments/*.rb files accordingly:
 
-> test-dir@0.1.0 dev
-> next dev
+  * development - set it to false
+  * test - set it to false (unless you use a tool that preloads your test environment)
+  * production - set it to true
 
-⚠ Port 3000 is in use by an unknown process, using available port 3001 instead.
-▲ Next.js 16.2.11 (Turbopack)
-- Local:         http://localhost:3001
-- Network:       http://192.168.0.2:3001
-✓ Ready in 603ms
-⨯ Another next dev server is already running.
+Puma starting in single mode...
+* Puma version: 8.0.2 ("Into the Arena")
+* Ruby version: ruby 3.2.3 (2024-01-18 revision 52bb2ac0a6) [x86_64-linux-gnu]
+*  Min threads: 0
+*  Max threads: 5
+*  Environment: development
+*          PID: 218444
+* Listening on http://127.0.0.1:3000
+* Listening on http://[::1]:3000
+Use Ctrl-C to stop
+Started HEAD "/map" for ::1 at 2026-10-07 11:15:06 +0000
 
-- Local:        http://localhost:3000
-- PID:          75961
-- Dir:          /app
-- Log:          .next/dev/logs/next-development.log
+ActionController::RoutingError (No route matches [HEAD] "/map"):
 
-Run kill 75961 to stop it.
-[?25h
+Started GET "/map/locations" for ::1 at 2026-10-07 11:15:25 +0000
+Processing by MapController#locations as */*
+  [1m[36mChurch Load (0.9ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."latitude" IS NOT NULL AND "igrejas"."longitude" IS NOT NULL[0m
+  [1m[36mChurch Load (1.1ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 1]]
+  [1m[36mChurch Load (0.8ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."id" = $1 LIMIT $2[0m  [["id", 1], ["LIMIT", 1]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 2]]
+  [1m[36mCACHE Church Load (0.0ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."id" = $1 LIMIT $2[0m  [["id", 1], ["LIMIT", 1]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 3]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."id" = $1 LIMIT $2[0m  [["id", 2], ["LIMIT", 1]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 4]]
+  [1m[36mCACHE Church Load (0.0ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."id" = $1 LIMIT $2[0m  [["id", 2], ["LIMIT", 1]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 5]]
+Completed 200 OK in 157ms (Views: 0.5ms | ActiveRecord: 17.4ms (10 queries, 2 cached) | GC: 11.5ms)
+
+
+Started GET "/" for ::1 at 2026-10-07 11:16:29 +0000
+Processing by MapController#index as HTML
+  [1m[36mChurch Count (0.8ms)[0m  [1m[34mSELECT COUNT(*) FROM "igrejas"[0m
+  Rendering layout layouts/application.html.erb
+  Rendering map/index.html.erb within layouts/application
+  Rendered shared/_navbar.html.erb (Duration: 0.4ms | GC: 0.0ms)
+  Rendered map/index.html.erb within layouts/application (Duration: 1.8ms | GC: 0.0ms)
+  Rendered layout layouts/application.html.erb (Duration: 8.2ms | GC: 0.1ms)
+Completed 200 OK in 48ms (Views: 37.3ms | ActiveRecord: 0.8ms (1 query, 0 cached) | GC: 0.5ms)
+
+
+Started GET "/map/locations" for ::1 at 2026-10-07 11:16:30 +0000
+Processing by MapController#locations as JSON
+  [1m[36mChurch Load (0.8ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."latitude" IS NOT NULL AND "igrejas"."longitude" IS NOT NULL[0m
+  [1m[36mChurch Load (0.5ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 1]]
+  [1m[36mChurch Load (0.5ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."id" = $1 LIMIT $2[0m  [["id", 1], ["LIMIT", 1]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 2]]
+  [1m[36mCACHE Church Load (0.0ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."id" = $1 LIMIT $2[0m  [["id", 1], ["LIMIT", 1]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 3]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."id" = $1 LIMIT $2[0m  [["id", 2], ["LIMIT", 1]]
+  [1m[36mChurch Load (0.3ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 4]]
+  [1m[36mCACHE Church Load (0.0ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."id" = $1 LIMIT $2[0m  [["id", 2], ["LIMIT", 1]]
+  [1m[36mChurch Load (0.4ms)[0m  [1m[34mSELECT "igrejas".* FROM "igrejas" WHERE "igrejas"."parent_id" = $1[0m  [["parent_id", 5]]
+Completed 200 OK in 16ms (Views: 0.3ms | ActiveRecord: 3.6ms (10 queries, 2 cached) | GC: 0.0ms)
+
+

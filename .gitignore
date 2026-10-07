@@ -19,6 +19,10 @@
 
 # production
 /build
+vendor/
+/vendor/
+.bundle/
+/.bundle/
 
 # misc
 .DS_Store

@@ -1,6 +1,12 @@
 class Church < ApplicationRecord
   self.table_name = 'igrejas'
 
+  # Associação para a igreja superior/sede (Coligada a)
+  belongs_to :parent_church, class_name: 'Church', foreign_key: 'parent_id', optional: true
+
+  # Associação para as igrejas subordinadas que respondem a esta sede
+  has_many :subordinate_churches, class_name: 'Church', foreign_key: 'parent_id'
+
   has_many :assets, class_name: 'Asset', foreign_key: :codigo_totvs, primary_key: :codigo_totvs
 
   REGIAO_GEOGRAFICA_MAPPING = {
@@ -157,6 +163,37 @@ class Church < ApplicationRecord
     codigo = map_attribute(:codigo_totvs) || map_attribute(:totvs_code)
     igreja_nome = nome
 
+    parent = parent_church
+    parent_data = if parent
+      parent_code = parent.map_attribute(:codigo_totvs) || parent.map_attribute(:totvs_code)
+      {
+        id: parent.id,
+        name: parent.nome,
+        nome: parent.nome,
+        porte: parent.calculated_porte,
+        totvs_code: parent_code,
+        codigo_totvs: parent_code,
+        latitude: parent.latitude,
+        longitude: parent.longitude
+      }
+    else
+      nil
+    end
+
+    sub_list = subordinate_churches.map do |sub|
+      sub_code = sub.map_attribute(:codigo_totvs) || sub.map_attribute(:totvs_code)
+      {
+        id: sub.id,
+        name: sub.nome,
+        nome: sub.nome,
+        porte: sub.calculated_porte,
+        totvs_code: sub_code,
+        codigo_totvs: sub_code,
+        latitude: sub.latitude,
+        longitude: sub.longitude
+      }
+    end
+
     {
       id: map_attribute(:id),
       codigo_totvs: codigo,
@@ -172,11 +209,14 @@ class Church < ApplicationRecord
       latitude: map_attribute(:latitude),
       longitude: map_attribute(:longitude),
       validada: validada,
-      link_google_maps: map_attribute(:link_google_maps)
+      link_google_maps: map_attribute(:link_google_maps),
+      parent_church: parent_data,
+      subordinates_count: subordinate_churches.size,
+      subordinates: sub_list
     }
   end
 
-  private
+  protected
 
   def map_attribute(attribute)
     has_attribute?(attribute) ? self[attribute] : nil
